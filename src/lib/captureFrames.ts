@@ -1,4 +1,5 @@
-import type { Frame } from "./types";
+import TickerWorker from "./ticker.ts?worker";
+import type { Frame, Recording } from "./types";
 
 export interface SamplerOptions {
   fps: number;
@@ -6,86 +7,59 @@ export interface SamplerOptions {
 }
 
 export interface Sampler {
-  /** Stop sampling and return the captured frames as RGBA buffers. */
-  stop: () => Promise<Frame[]>;
+  /** Stop sampling and return the recording (frames + real timestamps). */
+  stop: () => Recording;
 }
 
 /**
  * Samples frames from a video element at a target FPS, scaling each frame down
  * to maxWidth. Works for both a live screen stream and a playing video file.
  *
- * Perf: during capture we only grab lightweight `ImageBitmap`s via
- * `createImageBitmap` (decode + downscale happen off the main thread), so the
- * UI stays smooth while recording. The expensive `getImageData` pixel readback
- * is deferred to `stop()`, i.e. it runs during the encode phase, not the live
- * capture. Falls back to inline readback on browsers without createImageBitmap.
+ * Timing comes from a worker-driven clock (stable cadence) and every frame
+ * stores its REAL elapsed timestamp — so the encoder can use true per-frame
+ * delays instead of an assumed FPS, which is what keeps motion from juddering.
  */
 export function startSampling(video: HTMLVideoElement, opts: SamplerOptions): Sampler {
-  const interval = 1000 / opts.fps;
+  const frameLength = Math.max(1, Math.round(1000 / opts.fps));
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
-  const canBitmap = typeof createImageBitmap === "function";
+  const frames: Frame[] = [];
 
   let w = 0;
   let h = 0;
-  let last = -Infinity;
-  let raf = 0;
+  let startTime = 0;
   let stopped = false;
 
-  const bitmapJobs: Promise<ImageBitmap | null>[] = [];
-  const inlineFrames: Frame[] = [];
-
-  const tick = (t: number) => {
-    if (stopped) return;
-    if (t - last >= interval && video.videoWidth > 0) {
-      last = t;
-      if (w === 0) {
-        const scale = Math.min(1, opts.maxWidth / video.videoWidth);
-        w = Math.max(1, Math.round(video.videoWidth * scale));
-        h = Math.max(1, Math.round(video.videoHeight * scale));
-        canvas.width = w;
-        canvas.height = h;
-      }
-      if (canBitmap) {
-        // Off-thread decode + scale — does not block the main thread.
-        bitmapJobs.push(
-          createImageBitmap(video, {
-            resizeWidth: w,
-            resizeHeight: h,
-            resizeQuality: "medium",
-          }).catch(() => null)
-        );
-      } else {
-        ctx.drawImage(video, 0, 0, w, h);
-        const img = ctx.getImageData(0, 0, w, h);
-        inlineFrames.push({ data: img.data.buffer, width: w, height: h });
-      }
+  const worker = new TickerWorker();
+  worker.onmessage = () => {
+    if (stopped || video.videoWidth === 0) return;
+    if (w === 0) {
+      const scale = Math.min(1, opts.maxWidth / video.videoWidth);
+      w = Math.max(1, Math.round(video.videoWidth * scale));
+      h = Math.max(1, Math.round(video.videoHeight * scale));
+      canvas.width = w;
+      canvas.height = h;
+      startTime = performance.now();
     }
-    raf = requestAnimationFrame(tick);
+    ctx.drawImage(video, 0, 0, w, h);
+    const img = ctx.getImageData(0, 0, w, h);
+    frames.push({
+      data: img.data.buffer,
+      width: w,
+      height: h,
+      timestamp: frames.length === 0 ? 0 : Math.round(performance.now() - startTime),
+    });
   };
-  raf = requestAnimationFrame(tick);
+  worker.postMessage(frameLength);
 
   return {
-    stop: async () => {
+    stop: () => {
       stopped = true;
-      cancelAnimationFrame(raf);
-      if (!canBitmap) return inlineFrames;
-
-      // Heavy pixel extraction happens here, off the live-capture hot path.
-      const bitmaps = await Promise.all(bitmapJobs);
-      const frames: Frame[] = [];
-      for (const bmp of bitmaps) {
-        if (!bmp) continue;
-        if (canvas.width !== bmp.width || canvas.height !== bmp.height) {
-          canvas.width = bmp.width;
-          canvas.height = bmp.height;
-        }
-        ctx.drawImage(bmp, 0, 0);
-        const img = ctx.getImageData(0, 0, bmp.width, bmp.height);
-        frames.push({ data: img.data.buffer, width: bmp.width, height: bmp.height });
-        bmp.close();
-      }
-      return frames;
+      worker.terminate();
+      const duration = frames.length
+        ? frames[frames.length - 1].timestamp + frameLength
+        : 0;
+      return { width: w, height: h, duration, frames };
     },
   };
 }
@@ -94,4 +68,9 @@ export const formatBytes = (n: number): string => {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+export const formatDuration = (ms: number): string => {
+  const s = ms / 1000;
+  return s < 10 ? `${s.toFixed(1)}s` : `${Math.round(s)}s`;
 };

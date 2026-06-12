@@ -1,19 +1,24 @@
 import { GIFEncoder, quantize, applyPalette } from "gifenc";
-import type { Frame, EncodeOptions, WorkerMessage } from "./types";
+import type { EncodeFrame, WorkerMessage } from "./types";
 
 const post = (m: WorkerMessage, transfer?: Transferable[]) =>
   (self as unknown as Worker).postMessage(m, transfer ?? []);
 
-self.onmessage = (e: MessageEvent<{ frames: Frame[]; options: EncodeOptions }>) => {
-  const { frames, options } = e.data;
+self.onmessage = (
+  e: MessageEvent<{ frames: EncodeFrame[]; delays: number[]; maxColors: number }>
+) => {
+  const { frames, delays, maxColors } = e.data;
   try {
     const gif = GIFEncoder();
     for (let i = 0; i < frames.length; i++) {
       const f = frames[i];
       const rgba = new Uint8Array(f.data);
-      const palette = quantize(rgba, options.maxColors);
+      const palette = quantize(rgba, maxColors);
       const index = applyPalette(rgba, palette);
-      gif.writeFrame(index, f.width, f.height, { palette, delay: options.delayMs });
+      // GIF delays are stored in centiseconds; browsers clamp very small
+      // delays, so keep a sane floor.
+      const delay = Math.max(20, Math.round(delays[i] ?? 100));
+      gif.writeFrame(index, f.width, f.height, { palette, delay });
       post({ type: "progress", value: (i + 1) / frames.length });
     }
     gif.finish();

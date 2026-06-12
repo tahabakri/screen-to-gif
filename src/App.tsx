@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { startSampling, formatBytes, type Sampler } from "./lib/captureFrames";
+import {
+  startSampling,
+  formatBytes,
+  formatDuration,
+  type Sampler,
+} from "./lib/captureFrames";
 import { encodeGif } from "./lib/encodeGif";
+import type { Recording } from "./lib/types";
+import Editor from "./Editor";
 
-type Stage = "idle" | "recording" | "encoding" | "done";
+type Stage = "idle" | "recording" | "editing" | "encoding" | "done";
 
 const FPS_OPTIONS = [10, 12, 15, 20] as const;
 const SIZE_OPTIONS = [
@@ -15,12 +22,18 @@ const QUALITY_OPTIONS = [
   { label: "Balanced", maxColors: 128 },
   { label: "Tiny", maxColors: 64 },
 ] as const;
+const SPEED_OPTIONS = ["0.5×", "1×", "2×"] as const;
 
 export default function App() {
   const [stage, setStage] = useState<Stage>("idle");
   const [fps, setFps] = useState(15);
   const [sizeIdx, setSizeIdx] = useState(1);
   const [qualityIdx, setQualityIdx] = useState(0);
+
+  const [trimStart, setTrimStart] = useState(0);
+  const [trimEnd, setTrimEnd] = useState(0);
+  const [speed, setSpeed] = useState(1);
+  const [recId, setRecId] = useState(0);
 
   const [progress, setProgress] = useState(0);
   const [frameCount, setFrameCount] = useState(0);
@@ -40,8 +53,8 @@ export default function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const samplerRef = useRef<Sampler | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const recordingRef = useRef<Recording | null>(null);
 
-  // Apply theme class on <html> + persist.
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
     try {
@@ -62,35 +75,15 @@ export default function App() {
     setError(null);
   }, []);
 
-  const runEncode = useCallback(
-    async (frames: Parameters<typeof encodeGif>[0]) => {
-      if (frames.length === 0) {
-        setError("No frames were captured. Try a longer recording.");
-        setStage("idle");
-        return;
-      }
-      setFrameCount(frames.length);
-      setStage("encoding");
-      setProgress(0);
-      try {
-        const blob = await encodeGif(
-          frames,
-          {
-            delayMs: Math.round(1000 / fps),
-            maxColors: QUALITY_OPTIONS[qualityIdx].maxColors,
-          },
-          setProgress
-        );
-        setResultUrl(URL.createObjectURL(blob));
-        setResultSize(blob.size);
-        setStage("done");
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Encoding failed.");
-        setStage("idle");
-      }
-    },
-    [fps, qualityIdx]
-  );
+  const enterEditing = useCallback((rec: Recording) => {
+    recordingRef.current = rec;
+    setTrimStart(0);
+    setTrimEnd(Math.max(0, rec.frames.length - 1));
+    setSpeed(1);
+    setProgress(0);
+    setRecId((n) => n + 1);
+    setStage("editing");
+  }, []);
 
   const stopRecording = useCallback(() => {
     const sampler = samplerRef.current;
@@ -98,10 +91,14 @@ export default function App() {
     samplerRef.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
-    setStage("encoding");
-    setProgress(0);
-    void sampler.stop().then(runEncode);
-  }, [runEncode]);
+    const rec = sampler.stop();
+    if (rec.frames.length === 0) {
+      setError("No frames were captured. Try a longer recording.");
+      setStage("idle");
+      return;
+    }
+    enterEditing(rec);
+  }, [enterEditing]);
 
   const startRecording = useCallback(async () => {
     resetResult();
@@ -154,22 +151,102 @@ export default function App() {
           fps,
           maxWidth: SIZE_OPTIONS[sizeIdx].maxWidth,
         });
-        setStage("recording"); // reuse "capturing" visual while it plays through
+        setStage("recording"); // reuse the "capturing" visual while it plays through
         await video.play();
+        // Resolve when playback ends. A plain `onended` can hang forever on
+        // streams/malformed files (duration === Infinity, no end event), which
+        // would let the sampler run away — so also stop at a finite duration or
+        // when playback stalls.
         await new Promise<void>((res) => {
-          video.onended = () => res();
+          let lastT = -1;
+          let stalls = 0;
+          const finish = () => {
+            clearInterval(iv);
+            res();
+          };
+          const iv = window.setInterval(() => {
+            const d = video.duration;
+            if (video.ended) return finish();
+            if (isFinite(d) && d > 0 && video.currentTime >= d - 0.05) return finish();
+            if (video.currentTime === lastT) {
+              if (++stalls >= 8) return finish(); // ~0.8s with no progress
+            } else {
+              stalls = 0;
+              lastT = video.currentTime;
+            }
+          }, 100);
+          video.onended = finish;
         });
-        const frames = await sampler.stop();
+        const rec = sampler.stop();
         URL.revokeObjectURL(url);
-        await runEncode(frames);
+        if (rec.frames.length === 0) {
+          setError("That video produced no frames.");
+          setStage("idle");
+          return;
+        }
+        enterEditing(rec);
       } catch (err) {
         URL.revokeObjectURL(url);
         setError(err instanceof Error ? err.message : "Conversion failed.");
         setStage("idle");
       }
     },
-    [fps, sizeIdx, resetResult, runEncode]
+    [fps, sizeIdx, resetResult, enterEditing]
   );
+
+  const exportGif = useCallback(async () => {
+    const rec = recordingRef.current;
+    if (!rec) return;
+    const a = Math.min(trimStart, trimEnd);
+    const b = Math.max(trimStart, trimEnd);
+    const slice = rec.frames.slice(a, b + 1);
+    if (slice.length === 0) {
+      setError("Nothing to export.");
+      return;
+    }
+    // True per-frame delays from timestamps, scaled by playback speed.
+    const delays: number[] = [];
+    for (let i = 0; i < slice.length; i++) {
+      const next = slice[i + 1];
+      if (next) {
+        delays.push(Math.max(20, (next.timestamp - slice[i].timestamp) / speed));
+      } else {
+        delays.push(delays.length ? delays[delays.length - 1] : Math.max(20, 100 / speed));
+      }
+    }
+    // Copy buffers so the originals survive (the user may edit again).
+    const copies = slice.map((f) => ({
+      data: f.data.slice(0),
+      width: f.width,
+      height: f.height,
+    }));
+    setFrameCount(copies.length);
+    setStage("encoding");
+    setProgress(0);
+    try {
+      const blob = await encodeGif(
+        copies,
+        delays,
+        QUALITY_OPTIONS[qualityIdx].maxColors,
+        setProgress
+      );
+      setResultUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(blob);
+      });
+      setResultSize(blob.size);
+      setStage("done");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Encoding failed.");
+      setStage("editing");
+    }
+  }, [trimStart, trimEnd, speed, qualityIdx]);
+
+  const discard = useCallback(() => {
+    recordingRef.current = null;
+    resetResult();
+    setStage("idle");
+  }, [resetResult]);
 
   // Keyboard shortcuts: R to record, Esc to stop.
   useEffect(() => {
@@ -202,9 +279,26 @@ export default function App() {
       ? Math.max(0, Math.round((1 - resultSize / sourceSize) * 100))
       : null;
   const pct = Math.round(progress * 100);
+  const captureStage =
+    stage === "idle" || stage === "recording" || stage === "encoding";
+  const recFrames = recordingRef.current?.frames.length ?? 0;
+
+  const head =
+    stage === "recording"
+      ? { title: "Recording", sub: "Capturing your screen…" }
+      : stage === "editing"
+      ? { title: "Edit", sub: "Trim and tune, then export." }
+      : stage === "encoding"
+      ? { title: "Rendering", sub: "Building your GIF…" }
+      : stage === "done"
+      ? { title: "Done", sub: "Your GIF is ready." }
+      : { title: "Settings", sub: "Tune it, then record." };
+
   const status =
     stage === "recording"
       ? { label: "Recording", color: "var(--danger)" }
+      : stage === "editing"
+      ? { label: "Editing", color: "var(--blue)" }
       : stage === "encoding"
       ? { label: `Rendering ${pct}%`, color: "var(--yellow)" }
       : stage === "done"
@@ -249,37 +343,64 @@ export default function App() {
       {/* MAIN */}
       <main className="flex-1 min-h-0 p-5 md:p-6">
         <div className="h-full grid grid-cols-1 md:grid-cols-[330px_1fr] gap-5 md:gap-6">
-          {/* LEFT — SETTINGS */}
+          {/* LEFT — CONTROL PANEL */}
           <aside className="card p-5 flex flex-col min-h-0">
-            <h2 className="font-display text-base font-bold">Settings</h2>
-            <p className="text-xs theme-text-muted mb-4">Tune it, then record.</p>
+            <h2 className="font-display text-base font-bold">{head.title}</h2>
+            <p className="text-xs theme-text-muted mb-4">{head.sub}</p>
 
             <div className="flex flex-col gap-4 flex-1 min-h-0">
-              <Selector
-                label="Frames per second"
-                value={String(fps)}
-                options={FPS_OPTIONS.map(String)}
-                onChange={(v) => setFps(Number(v))}
-                disabled={busy}
-              />
-              <Selector
-                label="Size"
-                value={SIZE_OPTIONS[sizeIdx].label}
-                options={SIZE_OPTIONS.map((o) => o.label)}
-                onChange={(v) =>
-                  setSizeIdx(SIZE_OPTIONS.findIndex((o) => o.label === v))
-                }
-                disabled={busy}
-              />
-              <Selector
-                label="Quality"
-                value={QUALITY_OPTIONS[qualityIdx].label}
-                options={QUALITY_OPTIONS.map((o) => o.label)}
-                onChange={(v) =>
-                  setQualityIdx(QUALITY_OPTIONS.findIndex((o) => o.label === v))
-                }
-                disabled={busy}
-              />
+              {captureStage && (
+                <>
+                  <Selector
+                    label="Frames per second"
+                    value={String(fps)}
+                    options={FPS_OPTIONS.map(String)}
+                    onChange={(v) => setFps(Number(v))}
+                    disabled={busy}
+                  />
+                  <Selector
+                    label="Size"
+                    value={SIZE_OPTIONS[sizeIdx].label}
+                    options={SIZE_OPTIONS.map((o) => o.label)}
+                    onChange={(v) =>
+                      setSizeIdx(SIZE_OPTIONS.findIndex((o) => o.label === v))
+                    }
+                    disabled={busy}
+                  />
+                  <Selector
+                    label="Quality"
+                    value={QUALITY_OPTIONS[qualityIdx].label}
+                    options={QUALITY_OPTIONS.map((o) => o.label)}
+                    onChange={(v) =>
+                      setQualityIdx(QUALITY_OPTIONS.findIndex((o) => o.label === v))
+                    }
+                    disabled={busy}
+                  />
+                </>
+              )}
+
+              {stage === "editing" && (
+                <>
+                  <Selector
+                    label="Speed"
+                    value={`${speed}×`}
+                    options={SPEED_OPTIONS.map(String)}
+                    onChange={(v) => setSpeed(parseFloat(v))}
+                  />
+                  <Selector
+                    label="Quality"
+                    value={QUALITY_OPTIONS[qualityIdx].label}
+                    options={QUALITY_OPTIONS.map((o) => o.label)}
+                    onChange={(v) =>
+                      setQualityIdx(QUALITY_OPTIONS.findIndex((o) => o.label === v))
+                    }
+                  />
+                  <div className="rounded-xl border-2 theme-border p-3 text-xs theme-text-muted">
+                    Recorded <span className="font-semibold">{recFrames}</span>{" "}
+                    frames · {formatDuration(recordingRef.current?.duration ?? 0)}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* action area — swaps by stage */}
@@ -315,6 +436,24 @@ export default function App() {
                 </button>
               )}
 
+              {stage === "editing" && (
+                <>
+                  <button
+                    onClick={() => void exportGif()}
+                    className="btn btn-primary w-full !py-3.5"
+                  >
+                    <IconDownload />
+                    Export GIF
+                  </button>
+                  <button
+                    onClick={discard}
+                    className="btn btn-white w-full !py-2.5 !text-sm"
+                  >
+                    Discard
+                  </button>
+                </>
+              )}
+
               {stage === "done" && (
                 <>
                   <a
@@ -326,10 +465,13 @@ export default function App() {
                     Save .gif
                   </a>
                   <button
-                    onClick={() => {
-                      resetResult();
-                      setStage("idle");
-                    }}
+                    onClick={() => setStage("editing")}
+                    className="btn btn-white w-full !py-2.5 !text-sm"
+                  >
+                    Edit again
+                  </button>
+                  <button
+                    onClick={discard}
                     className="btn btn-white w-full !py-2.5 !text-sm"
                   >
                     Record another
@@ -396,6 +538,20 @@ export default function App() {
                   Capturing your screen — press <Kbd>Esc</Kbd> to stop
                 </div>
               </div>
+            )}
+
+            {stage === "editing" && recordingRef.current && (
+              <Editor
+                key={recId}
+                recording={recordingRef.current}
+                trimStart={trimStart}
+                trimEnd={trimEnd}
+                speed={speed}
+                onTrim={(s, e) => {
+                  setTrimStart(s);
+                  setTrimEnd(e);
+                }}
+              />
             )}
 
             {stage === "encoding" && (
@@ -536,17 +692,7 @@ function Kbd({ children }: { children: React.ReactNode }) {
 
 function IconFilm() {
   return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect width="18" height="18" x="3" y="3" rx="2" />
       <path d="M7 3v18" />
       <path d="M3 7.5h4" />
@@ -561,17 +707,7 @@ function IconFilm() {
 
 function IconLock() {
   return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect width="18" height="11" x="3" y="11" rx="2" />
       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
     </svg>
@@ -596,17 +732,7 @@ function IconStop() {
 
 function IconUpload() {
   return (
-    <svg
-      width="26"
-      height="26"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
       <path d="M17 8l-5-5-5 5" />
       <path d="M12 3v12" />
@@ -616,17 +742,7 @@ function IconUpload() {
 
 function IconDownload() {
   return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
       <path d="M7 10l5 5 5-5" />
       <path d="M12 15V3" />
@@ -636,17 +752,7 @@ function IconDownload() {
 
 function IconSun() {
   return (
-    <svg
-      width="15"
-      height="15"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.9"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <circle cx="12" cy="12" r="4" />
       <path d="M12 2v2" />
       <path d="M12 20v2" />
@@ -662,17 +768,7 @@ function IconSun() {
 
 function IconMoon() {
   return (
-    <svg
-      width="15"
-      height="15"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.9"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
     </svg>
   );

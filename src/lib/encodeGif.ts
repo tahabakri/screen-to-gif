@@ -1,9 +1,15 @@
 import GifWorker from "./gif.worker.ts?worker";
-import type { Frame, EncodeOptions, WorkerMessage } from "./types";
+import type { EncodeFrame, WorkerMessage } from "./types";
 
+/**
+ * Encodes frames into a GIF in a Web Worker. Each frame carries its own delay
+ * (ms), so playback timing matches the real recording. Frame buffers are
+ * transferred to the worker — pass copies if you need to keep the originals.
+ */
 export function encodeGif(
-  frames: Frame[],
-  options: EncodeOptions,
+  frames: EncodeFrame[],
+  delays: number[],
+  maxColors: number,
   onProgress?: (value: number) => void
 ): Promise<Blob> {
   return new Promise((resolve, reject) => {
@@ -24,6 +30,6 @@ export function encodeGif(
       worker.terminate();
     };
     const transfer = frames.map((f) => f.data);
-    worker.postMessage({ frames, options }, transfer);
+    worker.postMessage({ frames, delays, maxColors }, transfer);
   });
 }
