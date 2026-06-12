@@ -1,63 +1,29 @@
 @import "tailwindcss";
 
 /* ============================================================
-   Apple ecosystem design system
-   SF system font · semantic light/dark palette · vibrancy
+   NEO//RAW — neo-brutalist design system
+   Space Grotesk + JetBrains Mono · hard borders · hard shadows
+   lime-400 accent · square corners · manual light/dark
    ============================================================ */
 
 :root {
-  color-scheme: light dark;
-
-  /* light appearance (default) */
-  --bg-base: #f2f2f7;
-  --bg-aurora-1: rgba(10, 132, 255, 0.14);
-  --bg-aurora-2: rgba(175, 82, 222, 0.12);
-  --bg-aurora-3: rgba(255, 55, 95, 0.07);
-
-  --material: rgba(255, 255, 255, 0.64);
-  --fill: rgba(118, 118, 128, 0.12);
-  --segment-track: rgba(118, 118, 128, 0.12);
-  --segment-thumb: #ffffff;
-  --segment-thumb-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.1);
-
-  --label: #1d1d1f;
-  --label-secondary: rgba(60, 60, 67, 0.6);
-  --label-tertiary: rgba(60, 60, 67, 0.3);
-  --hairline: rgba(60, 60, 67, 0.18);
-  --separator: rgba(60, 60, 67, 0.16);
-
-  --blue: #007aff;
-  --red: #ff3b30;
-  --green: #34c759;
-
-  --shadow-card: 0 1px 1px rgba(0, 0, 0, 0.04), 0 12px 32px -10px rgba(0, 0, 0, 0.2);
+  --bg-page: #f2f2f2;
+  --bg-card: #ffffff;
+  --text-main: #0a0a0a;
+  --text-muted: #525252;
+  --border-main: #000000;
+  --lime: #a3e635;
+  --danger: #dc2626;
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg-base: #000000;
-    --bg-aurora-1: rgba(10, 132, 255, 0.2);
-    --bg-aurora-2: rgba(94, 92, 230, 0.18);
-    --bg-aurora-3: rgba(255, 55, 95, 0.12);
-
-    --material: rgba(44, 44, 46, 0.58);
-    --fill: rgba(118, 118, 128, 0.24);
-    --segment-track: rgba(118, 118, 128, 0.24);
-    --segment-thumb: #636366;
-    --segment-thumb-shadow: 0 3px 8px rgba(0, 0, 0, 0.44), 0 1px 2px rgba(0, 0, 0, 0.3);
-
-    --label: #f5f5f7;
-    --label-secondary: rgba(235, 235, 245, 0.6);
-    --label-tertiary: rgba(235, 235, 245, 0.3);
-    --hairline: rgba(255, 255, 255, 0.1);
-    --separator: rgba(84, 84, 88, 0.6);
-
-    --blue: #0a84ff;
-    --red: #ff453a;
-    --green: #30d158;
-
-    --shadow-card: 0 1px 1px rgba(0, 0, 0, 0.3), 0 18px 44px -14px rgba(0, 0, 0, 0.7);
-  }
+:root.dark {
+  --bg-page: #0f0f0f;
+  --bg-card: #171717;
+  --text-main: #ededed;
+  --text-muted: #a3a3a3;
+  --border-main: #ffffff;
+  color-scheme: dark;
 }
 
 html,
@@ -68,329 +34,127 @@ body,
 
 body {
   margin: 0;
-  background: var(--bg-base);
-  color: var(--label);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
-    "Helvetica Neue", Helvetica, Arial, sans-serif;
+  overflow: hidden; /* single-screen app — no page scroll */
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  background-color: var(--bg-page);
+  color: var(--text-main);
+  cursor: crosshair;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* fixed vibrancy backdrop ------------------------------------ */
-.ios-bg {
+::selection {
+  background: var(--lime);
+  color: #000;
+}
+
+/* token utilities (bridge CSS vars into class usage) ---------- */
+.font-mono {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+}
+.theme-border {
+  border-color: var(--border-main);
+}
+.theme-bg-page {
+  background-color: var(--bg-page);
+}
+.theme-bg-card {
+  background-color: var(--bg-card);
+}
+.theme-text-main {
+  color: var(--text-main);
+}
+.theme-text-muted {
+  color: var(--text-muted);
+}
+
+/* hard offset shadow ----------------------------------------- */
+.shadow-hard {
+  box-shadow: 4px 4px 0px 0px var(--border-main);
+}
+.shadow-hard-hover:hover {
+  box-shadow: 6px 6px 0px 0px var(--border-main);
+  transform: translate(-2px, -2px);
+}
+.shadow-hard-active:active {
+  box-shadow: 0px 0px 0px 0px var(--border-main);
+  transform: translate(4px, 4px);
+}
+
+/* grain overlay ---------------------------------------------- */
+.grain {
   position: fixed;
   inset: 0;
-  z-index: -1;
-  background:
-    radial-gradient(60% 50% at 12% -5%, var(--bg-aurora-1), transparent 70%),
-    radial-gradient(55% 48% at 105% 8%, var(--bg-aurora-2), transparent 72%),
-    radial-gradient(55% 55% at 85% 108%, var(--bg-aurora-3), transparent 70%),
-    var(--bg-base);
-}
-
-/* typography ------------------------------------------------- */
-.large-title {
-  font-size: 32px;
-  line-height: 1.08;
-  font-weight: 700;
-  letter-spacing: -0.022em;
-  color: var(--label);
-}
-.subtitle {
-  margin-top: 8px;
-  font-size: 16px;
-  line-height: 1.45;
-  color: var(--label-secondary);
-}
-.t-secondary {
-  color: var(--label-secondary);
-}
-.t-tertiary {
-  color: var(--label-tertiary);
-}
-.tnum {
-  font-feature-settings: "tnum";
-  font-variant-numeric: tabular-nums;
-}
-
-/* app icon (squircle) ---------------------------------------- */
-.app-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 15px;
-  display: grid;
-  place-items: center;
-  color: #fff;
-  background: linear-gradient(160deg, #5ac8fa 0%, #0a84ff 46%, #0a5bd6 100%);
-  box-shadow: 0 8px 22px -6px rgba(10, 132, 255, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.45);
-}
-
-/* frosted card ----------------------------------------------- */
-.ios-card {
-  background: var(--material);
-  backdrop-filter: blur(30px) saturate(180%);
-  -webkit-backdrop-filter: blur(30px) saturate(180%);
-  border: 0.5px solid var(--hairline);
-  border-radius: 22px;
-  box-shadow: var(--shadow-card);
-}
-
-.stagecard {
-  min-height: 17.5rem;
-}
-.stagecard--drop {
-  border-style: dashed;
-  border-width: 1.5px;
-  border-color: var(--hairline);
-  transition: border-color 0.2s, background 0.2s, transform 0.2s;
-}
-.stagecard--drop.is-drag {
-  border-color: var(--blue);
-  background: color-mix(in srgb, var(--blue) 8%, var(--material));
-  transform: scale(1.005);
-}
-
-.stage-anim {
-  animation: ios-pop 0.35s cubic-bezier(0.32, 0.72, 0, 1);
-}
-@keyframes ios-pop {
-  from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.99);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-/* settings rows ---------------------------------------------- */
-.setting + .setting {
-  margin-top: 18px;
-  padding-top: 18px;
-  border-top: 0.5px solid var(--separator);
-}
-.setting__label {
-  display: block;
-  margin-bottom: 10px;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--label);
-}
-
-/* iOS segmented control -------------------------------------- */
-.ios-seg {
-  position: relative;
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 1fr;
-  padding: 2px;
-  border-radius: 9px;
-  background: var(--segment-track);
-  user-select: none;
-}
-.ios-seg.is-disabled {
-  opacity: 0.5;
   pointer-events: none;
-}
-.ios-seg__thumb {
-  position: absolute;
-  top: 2px;
-  bottom: 2px;
-  left: 2px;
-  border-radius: 7px;
-  background: var(--segment-thumb);
-  box-shadow: var(--segment-thumb-shadow);
-  transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
-  pointer-events: none;
-}
-.ios-seg__opt {
-  position: relative;
-  z-index: 1;
-  appearance: none;
-  border: 0;
-  background: transparent;
-  padding: 7px 4px;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  color: var(--label);
-  cursor: pointer;
-  transition: color 0.2s, font-weight 0.2s;
-  font-feature-settings: "tnum";
-}
-.ios-seg__opt.is-active {
-  font-weight: 600;
-}
-.ios-seg__opt:not(.is-active):active {
-  opacity: 0.5;
+  z-index: 50;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
 }
 
-/* buttons ---------------------------------------------------- */
-.ios-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  height: 50px;
-  padding: 0 22px;
-  border: 0;
-  border-radius: 14px;
-  font-family: inherit;
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: transform 0.18s cubic-bezier(0.32, 0.72, 0, 1), filter 0.18s,
-    box-shadow 0.18s, background 0.18s;
-}
-.ios-btn:active {
-  transform: scale(0.965);
-}
-.ios-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-  transform: none;
-}
-.ios-btn--full {
-  width: 100%;
-}
-.ios-btn--blue {
-  background: var(--blue);
-  color: #fff;
-  box-shadow: 0 6px 18px -4px color-mix(in srgb, var(--blue) 55%, transparent);
-}
-.ios-btn--blue:hover {
-  filter: brightness(1.06);
-}
-.ios-btn--red {
-  background: var(--red);
-  color: #fff;
-  box-shadow: 0 6px 18px -4px color-mix(in srgb, var(--red) 55%, transparent);
-}
-.ios-btn--red:hover {
-  filter: brightness(1.06);
-}
-.ios-btn--tinted {
-  background: var(--fill);
-  color: var(--blue);
-}
-.ios-btn--plain {
-  background: transparent;
-  color: var(--blue);
-  height: auto;
-  padding: 10px;
-  box-shadow: none;
-}
-.ios-btn--plain:active {
-  opacity: 0.5;
-  transform: none;
-}
-
-/* progress --------------------------------------------------- */
-.ios-progress {
-  width: 100%;
-  height: 8px;
-  border-radius: 99px;
-  background: var(--fill);
-  overflow: hidden;
-}
-.ios-progress__fill {
-  height: 100%;
-  border-radius: 99px;
-  background: var(--blue);
-  transition: width 0.15s linear;
-}
-
-/* inset grouped list ----------------------------------------- */
-.ios-list {
-  border-radius: 14px;
-  background: var(--fill);
-  overflow: hidden;
-}
-.ios-list__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  font-size: 15px;
-}
-.ios-list__row + .ios-list__row {
-  border-top: 0.5px solid var(--separator);
-}
-.ios-list__row .k {
-  color: var(--label-secondary);
-}
-.ios-list__row .v {
-  color: var(--label);
-  font-weight: 600;
-  font-feature-settings: "tnum";
-}
-.ios-list__row .v.green {
-  color: var(--green);
-}
-
-/* recording pulse dot ---------------------------------------- */
-.rec-dot {
-  position: relative;
-  display: inline-flex;
-  width: 11px;
-  height: 11px;
-}
-.rec-dot::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: var(--red);
-  animation: ios-ping 1.2s cubic-bezier(0, 0, 0.2, 1) infinite;
-}
-.rec-dot::after {
-  content: "";
-  position: relative;
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: var(--red);
-}
-@keyframes ios-ping {
+/* marquee ---------------------------------------------------- */
+@keyframes marquee {
   0% {
-    transform: scale(1);
-    opacity: 0.7;
+    transform: translateX(0);
   }
-  75%,
   100% {
-    transform: scale(2.2);
-    opacity: 0;
+    transform: translateX(-50%);
   }
+}
+.animate-marquee {
+  animation: marquee 22s linear infinite;
+}
+
+/* hard brutalist blink (steps, no fade) ---------------------- */
+@keyframes bru-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.15;
+  }
+}
+.animate-blink {
+  animation: bru-blink 1s steps(1, end) infinite;
+}
+
+/* brutalist progress ----------------------------------------- */
+.bru-progress {
+  width: 100%;
+  height: 28px;
+  border: 2px solid var(--border-main);
+  background: var(--bg-page);
+  overflow: hidden;
+}
+.bru-progress__fill {
+  height: 100%;
+  background: var(--lime);
+  border-right: 2px solid var(--border-main);
+  transition: width 0.12s linear;
 }
 
 /* keycap ----------------------------------------------------- */
-.ios-kbd {
-  display: inline-block;
-  min-width: 22px;
-  text-align: center;
-  padding: 2px 6px;
-  border-radius: 6px;
-  background: var(--fill);
-  color: var(--label-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  font-family: inherit;
-  box-shadow: inset 0 -1px 0 var(--separator);
+.bru-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  padding: 1px 5px;
+  border: 2px solid var(--border-main);
+  background: var(--bg-card);
+  color: var(--text-main);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
-/* error note ------------------------------------------------- */
-.ios-note {
-  border-radius: 14px;
-  padding: 12px 16px;
-  font-size: 14px;
-  color: var(--red);
-  background: color-mix(in srgb, var(--red) 12%, var(--material));
-  border: 0.5px solid color-mix(in srgb, var(--red) 30%, transparent);
+/* drop target ------------------------------------------------ */
+.bru-drop {
+  border: 2px dashed var(--border-main);
+  transition: background-color 0.15s ease, border-style 0.15s ease;
+}
+.bru-drop.is-drag {
+  border-style: solid;
+  background-color: color-mix(in srgb, var(--lime) 25%, transparent);
 }

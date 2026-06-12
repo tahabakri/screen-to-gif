@@ -16,6 +16,14 @@ const QUALITY_OPTIONS = [
   { label: "Tiny", maxColors: 64 },
 ] as const;
 
+const MARQUEE = [
+  "Screen → GIF",
+  "100% Client-Side",
+  "Nothing Uploaded",
+  "No Compromise",
+  "Raw & Fast",
+];
+
 export default function App() {
   const [stage, setStage] = useState<Stage>("idle");
   const [fps, setFps] = useState(15);
@@ -29,10 +37,29 @@ export default function App() {
   const [sourceSize, setSourceSize] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [dark, setDark] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("scrgif-theme");
+      if (saved) return saved === "dark";
+      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+    } catch {
+      return false;
+    }
+  });
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const samplerRef = useRef<Sampler | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // Apply theme class on <html> + persist.
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+    try {
+      localStorage.setItem("scrgif-theme", dark ? "dark" : "light");
+    } catch {
+      /* storage unavailable — ignore */
+    }
+  }, [dark]);
 
   const resetResult = useCallback(() => {
     setResultUrl((prev) => {
@@ -183,58 +210,178 @@ export default function App() {
     sourceSize && resultSize
       ? Math.max(0, Math.round((1 - resultSize / sourceSize) * 100))
       : null;
+  const pct = Math.round(progress * 100);
+  const statusLabel =
+    stage === "recording"
+      ? "Capturing"
+      : stage === "encoding"
+      ? `Encoding ${pct}%`
+      : stage === "done"
+      ? "Render Complete"
+      : "All Systems Operational";
 
   return (
-    <div className="min-h-screen">
-      <div className="ios-bg" />
+    <div className="h-screen flex flex-col overflow-hidden theme-bg-page theme-text-main">
+      <div className="grain" />
       {/* hidden capture surface */}
       <video ref={videoRef} className="hidden" playsInline muted />
 
-      <div className="mx-auto flex min-h-screen max-w-lg flex-col px-5 py-12">
-        <header className="mb-9">
-          <div className="flex items-center gap-4">
-            <div className="app-icon">
-              <IconScreenRecord />
-            </div>
-            <h1 className="large-title">Screen to GIF</h1>
+      {/* NAV */}
+      <nav className="flex items-stretch justify-between h-14 border-b-2 theme-border shrink-0">
+        <div className="flex items-center px-5 bg-lime-400 text-black border-r-2 theme-border select-none">
+          <IconBox />
+          <span className="ml-3 font-mono text-sm font-bold tracking-tight">
+            SCR//GIF
+          </span>
+        </div>
+        <div className="flex items-stretch">
+          <div className="hidden sm:flex items-center px-5 border-l-2 theme-border font-mono text-[10px] uppercase tracking-widest theme-text-muted select-none">
+            Client-Side · No Upload
           </div>
-          <p className="subtitle">
-            Record your screen or drop in a video — it becomes a GIF right on
-            your device. Nothing is uploaded.
-          </p>
-        </header>
+          <button
+            onClick={() => setDark((d) => !d)}
+            className="flex items-center gap-2 px-5 border-l-2 theme-border font-mono text-[11px] uppercase tracking-widest hover:bg-[var(--text-main)] hover:text-[var(--bg-page)] transition-colors"
+          >
+            {dark ? <IconSun /> : <IconMoon />}
+            <span className="hidden sm:inline">{dark ? "Light" : "Dark"}</span>
+          </button>
+        </div>
+      </nav>
 
-        {/* settings */}
-        <section className="ios-card p-5">
-          <Segmented
-            label="Frame rate"
-            value={String(fps)}
-            options={FPS_OPTIONS.map(String)}
-            onChange={(v) => setFps(Number(v))}
-            disabled={busy}
-          />
-          <Segmented
-            label="Size"
-            value={SIZE_OPTIONS[sizeIdx].label}
-            options={SIZE_OPTIONS.map((o) => o.label)}
-            onChange={(v) =>
-              setSizeIdx(SIZE_OPTIONS.findIndex((o) => o.label === v))
-            }
-            disabled={busy}
-          />
-          <Segmented
-            label="Quality"
-            value={QUALITY_OPTIONS[qualityIdx].label}
-            options={QUALITY_OPTIONS.map((o) => o.label)}
-            onChange={(v) =>
-              setQualityIdx(QUALITY_OPTIONS.findIndex((o) => o.label === v))
-            }
-            disabled={busy}
-          />
-        </section>
+      {/* MARQUEE */}
+      <div className="overflow-hidden bg-lime-400 text-black border-b-2 theme-border py-1.5 shrink-0 select-none">
+        <div className="flex w-max animate-marquee">
+          {[0, 1].map((g) => (
+            <div
+              key={g}
+              className="flex items-center gap-6 pr-6 font-mono text-xs font-bold uppercase tracking-tight"
+            >
+              {MARQUEE.map((m, i) => (
+                <span key={i} className="flex items-center gap-6">
+                  <span>{m}</span>
+                  <IconAsterisk />
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
 
-        {/* main action area */}
-        <div className="mt-6 flex-1">
+      {/* MAIN */}
+      <main className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[320px_1fr]">
+        {/* LEFT — CONFIG / CONTROL DECK */}
+        <aside className="flex flex-col min-h-0 border-b-2 md:border-b-0 md:border-r-2 theme-border theme-bg-page">
+          <div className="flex items-center justify-between px-5 h-11 border-b-2 theme-border shrink-0">
+            <span className="font-mono text-[11px] uppercase tracking-widest theme-text-muted">
+              // Config
+            </span>
+            <span className="font-mono text-[11px] tracking-widest theme-text-muted">
+              v2.0
+            </span>
+          </div>
+
+          <div className="flex-1 min-h-0 p-5 flex flex-col gap-5 overflow-hidden">
+            <Selector
+              tag="01"
+              label="Frame Rate"
+              value={String(fps)}
+              options={FPS_OPTIONS.map(String)}
+              onChange={(v) => setFps(Number(v))}
+              disabled={busy}
+            />
+            <Selector
+              tag="02"
+              label="Size"
+              value={SIZE_OPTIONS[sizeIdx].label}
+              options={SIZE_OPTIONS.map((o) => o.label)}
+              onChange={(v) =>
+                setSizeIdx(SIZE_OPTIONS.findIndex((o) => o.label === v))
+              }
+              disabled={busy}
+            />
+            <Selector
+              tag="03"
+              label="Quality"
+              value={QUALITY_OPTIONS[qualityIdx].label}
+              options={QUALITY_OPTIONS.map((o) => o.label)}
+              onChange={(v) =>
+                setQualityIdx(QUALITY_OPTIONS.findIndex((o) => o.label === v))
+              }
+              disabled={busy}
+            />
+          </div>
+
+          {/* action area — swaps by stage */}
+          <div className="p-5 border-t-2 theme-border shrink-0 flex flex-col gap-3">
+            {stage === "idle" && (
+              <>
+                <button
+                  onClick={() => void startRecording()}
+                  className="w-full flex items-center justify-center gap-2 py-4 border-2 theme-border bg-[var(--text-main)] text-[var(--bg-page)] font-mono text-sm uppercase tracking-widest font-medium shadow-hard shadow-hard-hover shadow-hard-active transition-all"
+                >
+                  Start Recording
+                  <IconArrowRight />
+                </button>
+                <p className="font-mono text-[10px] uppercase tracking-widest theme-text-muted text-center">
+                  or drop a clip on the stage →
+                </p>
+              </>
+            )}
+
+            {stage === "recording" && (
+              <button
+                onClick={stopRecording}
+                className="w-full flex items-center justify-center gap-2 py-4 border-2 theme-border bg-[var(--danger)] text-white font-mono text-sm uppercase tracking-widest font-medium shadow-hard shadow-hard-hover shadow-hard-active transition-all"
+              >
+                <IconStopSquare />
+                Stop &amp; Render
+              </button>
+            )}
+
+            {stage === "encoding" && (
+              <button
+                disabled
+                className="w-full flex items-center justify-center gap-2 py-4 border-2 theme-border bg-lime-400 text-black font-mono text-sm uppercase tracking-widest font-medium opacity-80 cursor-not-allowed"
+              >
+                Rendering… {pct}%
+              </button>
+            )}
+
+            {stage === "done" && (
+              <>
+                <a
+                  href={resultUrl ?? "#"}
+                  download="recording.gif"
+                  className="w-full flex items-center justify-center gap-2 py-4 border-2 theme-border bg-lime-400 text-black font-mono text-sm uppercase tracking-widest font-semibold shadow-hard shadow-hard-hover shadow-hard-active transition-all"
+                >
+                  <IconDownload />
+                  Save .GIF
+                </a>
+                <button
+                  onClick={() => {
+                    resetResult();
+                    setStage("idle");
+                  }}
+                  className="w-full py-3 border-2 theme-border bg-transparent font-mono text-xs uppercase tracking-widest hover:bg-[var(--text-main)] hover:text-[var(--bg-page)] transition-colors"
+                >
+                  Record New
+                </button>
+              </>
+            )}
+          </div>
+        </aside>
+
+        {/* RIGHT — STAGE */}
+        <section className="relative min-h-0 flex flex-col theme-bg-card">
+          {error && (
+            <div
+              className="m-4 mb-0 border-2 px-4 py-2 font-mono text-[11px] uppercase tracking-widest shrink-0"
+              style={{ borderColor: "var(--danger)", color: "var(--danger)" }}
+            >
+              {error}
+            </div>
+          )}
+
           {stage === "idle" && (
             <div
               onDragOver={(e) => {
@@ -243,213 +390,210 @@ export default function App() {
               }}
               onDragLeave={() => setDragging(false)}
               onDrop={onDrop}
-              className={`ios-card stagecard stagecard--drop stage-anim flex flex-col items-center justify-center gap-5 px-6 text-center ${
+              className={`bru-drop m-4 flex-1 min-h-0 flex flex-col items-center justify-center gap-4 text-center ${
                 dragging ? "is-drag" : ""
               }`}
             >
-              <button
-                onClick={() => void startRecording()}
-                className="ios-btn ios-btn--blue"
-              >
-                <IconRecord />
-                Start recording
-              </button>
-              <p className="t-secondary text-sm">
-                or drop a video file to convert
-              </p>
-              <p className="t-tertiary text-xs">
-                Press <Kbd>R</Kbd> to record · <Kbd>Esc</Kbd> to stop
-              </p>
+              <IconUpload />
+              <div className="font-mono text-sm uppercase tracking-widest">
+                Drop a video file
+              </div>
+              <div className="font-mono text-[11px] uppercase tracking-widest theme-text-muted">
+                or press <Kbd>R</Kbd> to record your screen
+              </div>
             </div>
           )}
 
           {stage === "recording" && (
-            <div className="ios-card stagecard stage-anim flex flex-col items-center justify-center gap-5 px-6 text-center">
-              <div className="flex items-center gap-3 text-[17px] font-semibold">
-                <span className="rec-dot" />
-                Recording…
+            <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-5 text-center px-6">
+              <div className="flex items-center gap-3">
+                <span className="w-4 h-4 bg-[var(--danger)] border-2 theme-border animate-blink" />
+                <span className="font-mono text-xl uppercase tracking-widest">
+                  Recording
+                </span>
               </div>
-              <button onClick={stopRecording} className="ios-btn ios-btn--red">
-                <IconStop />
-                Stop &amp; make GIF
-              </button>
-              <p className="t-tertiary text-xs">
-                or press <Kbd>Esc</Kbd>
-              </p>
+              <div className="font-mono text-[11px] uppercase tracking-widest theme-text-muted">
+                Capturing your screen — <Kbd>Esc</Kbd> to stop
+              </div>
             </div>
           )}
 
           {stage === "encoding" && (
-            <div className="ios-card stagecard stage-anim flex flex-col items-center justify-center gap-4 px-10 text-center">
-              <p className="text-[17px] font-semibold">Creating GIF…</p>
-              <div className="ios-progress w-full max-w-sm">
-                <div
-                  className="ios-progress__fill"
-                  style={{ width: `${Math.round(progress * 100)}%` }}
-                />
+            <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-6 px-8 text-center">
+              <div className="font-mono text-7xl font-bold tabular-nums leading-none">
+                {pct}
+                <span className="text-3xl align-top">%</span>
               </div>
-              <p className="t-secondary text-sm tnum">
-                {Math.round(progress * 100)}% · {frameCount} frames
-              </p>
+              <div className="bru-progress w-full max-w-md">
+                <div className="bru-progress__fill" style={{ width: `${pct}%` }} />
+              </div>
+              <div className="font-mono text-[11px] uppercase tracking-widest theme-text-muted">
+                Rendering · {frameCount} frames
+              </div>
             </div>
           )}
 
           {stage === "done" && resultUrl && (
-            <div className="ios-card stage-anim p-4">
-              <img
-                src={resultUrl}
-                alt="Your recording as a GIF"
-                className="mx-auto max-h-80 rounded-xl"
-              />
-              <div className="ios-list mt-4">
-                <div className="ios-list__row">
-                  <span className="k">GIF size</span>
-                  <span className="v">{formatBytes(resultSize)}</span>
+            <div className="flex-1 min-h-0 flex flex-col p-4 gap-3">
+              <div className="relative flex-1 min-h-0 border-2 theme-border theme-bg-page flex items-center justify-center overflow-hidden">
+                <img
+                  src={resultUrl}
+                  alt="Your recording as a GIF"
+                  className="max-h-full max-w-full object-contain"
+                />
+                <div className="absolute bottom-0 left-0 px-2 py-1 border-t-2 border-r-2 theme-border theme-bg-card font-mono text-[10px] uppercase tracking-widest">
+                  Output.gif
                 </div>
-                {sourceSize !== null && (
-                  <div className="ios-list__row">
-                    <span className="k">Original</span>
-                    <span className="v">{formatBytes(sourceSize)}</span>
-                  </div>
-                )}
-                {savings !== null && savings > 0 && (
-                  <div className="ios-list__row">
-                    <span className="k">Saved</span>
-                    <span className="v green">{savings}% smaller</span>
-                  </div>
-                )}
               </div>
-              <div className="mt-4 flex flex-col gap-2">
-                <a
-                  href={resultUrl}
-                  download="recording.gif"
-                  className="ios-btn ios-btn--blue ios-btn--full"
-                >
-                  <IconDownload />
-                  Save GIF
-                </a>
-                <button
-                  onClick={() => {
-                    resetResult();
-                    setStage("idle");
-                  }}
-                  className="ios-btn ios-btn--plain ios-btn--full"
-                >
-                  Record another
-                </button>
+              <div className="grid grid-cols-3 border-2 theme-border shrink-0 font-mono">
+                <Stat label="GIF" value={formatBytes(resultSize)} border />
+                <Stat
+                  label="Source"
+                  value={sourceSize !== null ? formatBytes(sourceSize) : "—"}
+                  border
+                />
+                <Stat
+                  label="Saved"
+                  value={savings !== null && savings > 0 ? `${savings}%` : "—"}
+                  accent={savings !== null && savings > 0}
+                />
               </div>
             </div>
           )}
+        </section>
+      </main>
 
-          {error && <p className="ios-note mt-4">{error}</p>}
+      {/* STATUS BAR */}
+      <div className="h-9 border-t-2 theme-border flex items-center justify-between px-4 shrink-0 font-mono text-[10px] uppercase tracking-widest theme-bg-page">
+        <div className="flex items-center gap-2">
+          <span className="theme-text-muted">Press</span>
+          <Kbd>R</Kbd>
+          <span className="theme-text-muted">rec</span>
+          <span className="theme-text-muted">/</span>
+          <Kbd>Esc</Kbd>
+          <span className="theme-text-muted">stop</span>
         </div>
-
-        <footer className="t-secondary mt-10 text-center text-xs">
-          100% client-side · your recording never leaves your device
-        </footer>
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+          <span>{statusLabel}</span>
+        </div>
       </div>
     </div>
   );
 }
 
-function Segmented({
+function Selector({
+  tag,
   label,
   value,
   options,
   onChange,
   disabled,
 }: {
+  tag: string;
   label: string;
   value: string;
   options: string[];
   onChange: (v: string) => void;
   disabled?: boolean;
 }) {
-  const idx = Math.max(0, options.indexOf(value));
   return (
-    <div className="setting">
-      <span className="setting__label">{label}</span>
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <span className="font-mono text-[11px] uppercase tracking-widest theme-text-muted">
+          {label}
+        </span>
+        <span className="font-mono text-[11px] tracking-widest theme-text-muted">
+          {tag}
+        </span>
+      </div>
       <div
-        className={`ios-seg ${disabled ? "is-disabled" : ""}`}
-        role="group"
-        aria-label={label}
+        className={`grid grid-flow-col auto-cols-fr border-2 theme-border ${
+          disabled ? "opacity-40 pointer-events-none" : ""
+        }`}
       >
-        <span
-          className="ios-seg__thumb"
-          style={{
-            width: `calc((100% - 4px) / ${options.length})`,
-            transform: `translateX(${idx * 100}%)`,
-          }}
-        />
-        {options.map((o) => (
-          <button
-            key={o}
-            type="button"
-            disabled={disabled}
-            aria-pressed={o === value}
-            onClick={() => onChange(o)}
-            className={`ios-seg__opt ${o === value ? "is-active" : ""}`}
-          >
-            {o}
-          </button>
-        ))}
+        {options.map((o, i) => {
+          const active = o === value;
+          return (
+            <button
+              key={o}
+              type="button"
+              disabled={disabled}
+              aria-pressed={active}
+              onClick={() => onChange(o)}
+              className={`py-2.5 font-mono text-xs uppercase tracking-wide transition-colors ${
+                i > 0 ? "border-l-2 theme-border" : ""
+              } ${
+                active
+                  ? "bg-lime-400 text-black font-semibold"
+                  : "hover:bg-[var(--text-main)] hover:text-[var(--bg-page)]"
+              }`}
+            >
+              {o}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  border,
+  accent,
+}: {
+  label: string;
+  value: string;
+  border?: boolean;
+  accent?: boolean;
+}) {
+  return (
+    <div className={`p-2.5 ${border ? "border-r-2 theme-border" : ""}`}>
+      <div className="text-[10px] uppercase tracking-widest theme-text-muted">
+        {label}
+      </div>
+      <div
+        className={`text-sm font-bold tabular-nums ${accent ? "text-lime-500" : ""}`}
+      >
+        {value}
       </div>
     </div>
   );
 }
 
 function Kbd({ children }: { children: React.ReactNode }) {
-  return <kbd className="ios-kbd">{children}</kbd>;
+  return <kbd className="bru-kbd">{children}</kbd>;
 }
 
-/* SF Symbols–style glyphs (currentColor, rounded strokes) */
+/* lucide-style inline glyphs (currentColor) */
 
-function IconScreenRecord() {
-  return (
-    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <rect
-        x="3.2"
-        y="5"
-        width="17.6"
-        height="13"
-        rx="3"
-        stroke="currentColor"
-        strokeWidth="1.7"
-      />
-      <circle cx="12" cy="11.5" r="3.1" fill="currentColor" />
-    </svg>
-  );
-}
-
-function IconRecord() {
-  return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <circle cx="12" cy="12" r="5" fill="currentColor" />
-      <circle
-        cx="12"
-        cy="12"
-        r="8.4"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        opacity="0.9"
-      />
-    </svg>
-  );
-}
-
-function IconStop() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="6.5" y="6.5" width="11" height="11" rx="2.6" fill="currentColor" />
-    </svg>
-  );
-}
-
-function IconDownload() {
+function IconBox() {
   return (
     <svg
-      width="17"
-      height="17"
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+      <path d="m3.3 7 8.7 5 8.7-5" />
+      <path d="M12 22V12" />
+    </svg>
+  );
+}
+
+function IconArrowRight() {
+  return (
+    <svg
+      width="16"
+      height="16"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -458,9 +602,119 @@ function IconDownload() {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="M12 4v9" />
-      <path d="M8.5 10.5 12 14l3.5-3.5" />
-      <path d="M5 15v2.5A2.5 2.5 0 0 0 7.5 20h9a2.5 2.5 0 0 0 2.5-2.5V15" />
+      <path d="M5 12h14" />
+      <path d="m12 5 7 7-7 7" />
+    </svg>
+  );
+}
+
+function IconUpload() {
+  return (
+    <svg
+      width="40"
+      height="40"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="M17 8l-5-5-5 5" />
+      <path d="M12 3v12" />
+    </svg>
+  );
+}
+
+function IconStopSquare() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="5" y="5" width="14" height="14" fill="currentColor" />
+    </svg>
+  );
+}
+
+function IconDownload() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="M7 10l5 5 5-5" />
+      <path d="M12 15V3" />
+    </svg>
+  );
+}
+
+function IconSun() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2" />
+      <path d="M12 20v2" />
+      <path d="m4.93 4.93 1.41 1.41" />
+      <path d="m17.66 17.66 1.41 1.41" />
+      <path d="M2 12h2" />
+      <path d="M20 12h2" />
+      <path d="m6.34 17.66-1.41 1.41" />
+      <path d="m19.07 4.93-1.41 1.41" />
+    </svg>
+  );
+}
+
+function IconMoon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+    </svg>
+  );
+}
+
+function IconAsterisk() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <path d="M12 6v12" />
+      <path d="M17.196 9 6.804 15" />
+      <path d="m6.804 9 10.392 6" />
     </svg>
   );
 }
