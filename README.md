@@ -2,7 +2,7 @@
 
 A fast, private, **100% client-side** screen recorder and video-to-GIF converter. Record your screen (or drop in a video file) and it becomes an optimized GIF right in your browser — nothing is ever uploaded to a server.
 
-🔗 **Live demo:** _add your GitHub Pages URL here after deploying_
+🔗 **Live demo:** https://tahabakri.github.io/screen-to-gif/
 
 ## Features
 
