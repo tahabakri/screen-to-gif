@@ -9,7 +9,7 @@ import { encodeGif } from "./lib/encodeGif";
 import type { Recording } from "./lib/types";
 import Editor from "./Editor";
 
-type Stage = "idle" | "recording" | "editing" | "encoding" | "done";
+type Stage = "idle" | "recording" | "importing" | "editing" | "encoding" | "done";
 
 const FPS_OPTIONS = [10, 12, 15, 20] as const;
 const SIZE_OPTIONS = [
@@ -51,6 +51,7 @@ export default function App() {
   });
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const samplerRef = useRef<Sampler | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recordingRef = useRef<Recording | null>(null);
@@ -151,7 +152,7 @@ export default function App() {
           fps,
           maxWidth: SIZE_OPTIONS[sizeIdx].maxWidth,
         });
-        setStage("recording"); // reuse the "capturing" visual while it plays through
+        setStage("importing");
         await video.play();
         // Resolve when playback ends. A plain `onended` can hang forever on
         // streams/malformed files (duration === Infinity, no end event), which
@@ -273,19 +274,35 @@ export default function App() {
     [convertFile]
   );
 
-  const busy = stage === "recording" || stage === "encoding";
+  const pickFile = useCallback(() => fileInputRef.current?.click(), []);
+  const onFileInput = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = ""; // allow re-picking the same file
+      if (file) void convertFile(file);
+    },
+    [convertFile]
+  );
+
+  const busy =
+    stage === "recording" || stage === "importing" || stage === "encoding";
   const savings =
     sourceSize && resultSize
       ? Math.max(0, Math.round((1 - resultSize / sourceSize) * 100))
       : null;
   const pct = Math.round(progress * 100);
   const captureStage =
-    stage === "idle" || stage === "recording" || stage === "encoding";
+    stage === "idle" ||
+    stage === "recording" ||
+    stage === "importing" ||
+    stage === "encoding";
   const recFrames = recordingRef.current?.frames.length ?? 0;
 
   const head =
     stage === "recording"
       ? { title: "Recording", sub: "Capturing your screen…" }
+      : stage === "importing"
+      ? { title: "Importing", sub: "Reading your video…" }
       : stage === "editing"
       ? { title: "Edit", sub: "Trim and tune, then export." }
       : stage === "encoding"
@@ -297,6 +314,8 @@ export default function App() {
   const status =
     stage === "recording"
       ? { label: "Recording", color: "var(--danger)" }
+      : stage === "importing"
+      ? { label: "Importing", color: "var(--blue)" }
       : stage === "editing"
       ? { label: "Editing", color: "var(--blue)" }
       : stage === "encoding"
@@ -310,6 +329,13 @@ export default function App() {
       <div className="grid-bg" />
       {/* hidden capture surface */}
       <video ref={videoRef} className="hidden" playsInline muted />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="video/*"
+        className="hidden"
+        onChange={onFileInput}
+      />
 
       {/* TOP BAR */}
       <header className="flex items-center justify-between h-16 px-5 border-b-2 theme-border shrink-0">
@@ -430,6 +456,12 @@ export default function App() {
                 </button>
               )}
 
+              {stage === "importing" && (
+                <button disabled className="btn btn-white w-full !py-3.5">
+                  Processing…
+                </button>
+              )}
+
               {stage === "encoding" && (
                 <button disabled className="btn btn-green w-full !py-3.5">
                   Rendering… {pct}%
@@ -504,7 +536,8 @@ export default function App() {
                 }}
                 onDragLeave={() => setDragging(false)}
                 onDrop={onDrop}
-                className={`drop flex-1 min-h-0 flex flex-col items-center justify-center gap-3 text-center px-6 ${
+                onClick={pickFile}
+                className={`drop flex-1 min-h-0 flex flex-col items-center justify-center gap-3 text-center px-6 cursor-pointer ${
                   dragging ? "is-drag" : ""
                 }`}
               >
@@ -515,10 +548,22 @@ export default function App() {
                   <IconUpload />
                 </div>
                 <div className="font-display text-lg font-bold">
-                  Drop a video to convert
+                  Drop a video here, or upload one
                 </div>
-                <div className="text-sm theme-text-muted">
-                  MP4, WebM, MOV — or press <Kbd>R</Kbd> to record your screen
+                <div className="text-sm theme-text-muted">MP4, WebM, MOV</div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    pickFile();
+                  }}
+                  className="btn btn-white !py-2 !px-4 !text-sm mt-1"
+                >
+                  <IconUpload />
+                  Choose file
+                </button>
+                <div className="text-[11px] theme-text-muted mt-1">
+                  or press <Kbd>R</Kbd> to record your screen
                 </div>
               </div>
             )}
@@ -536,6 +581,23 @@ export default function App() {
                 </div>
                 <div className="text-sm theme-text-muted">
                   Capturing your screen — press <Kbd>Esc</Kbd> to stop
+                </div>
+              </div>
+            )}
+
+            {stage === "importing" && (
+              <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-4 text-center px-6">
+                <div className="flex items-center gap-2.5">
+                  <span
+                    className="w-3 h-3 rounded-full animate-pulse"
+                    style={{ background: "var(--blue)" }}
+                  />
+                  <span className="font-display text-xl font-bold">
+                    Reading your video…
+                  </span>
+                </div>
+                <div className="text-sm theme-text-muted">
+                  Sampling frames — this only takes a moment.
                 </div>
               </div>
             )}
