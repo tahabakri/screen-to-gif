@@ -185,42 +185,44 @@ export default function App() {
       : null;
 
   return (
-    <div className="min-h-full text-neutral-100">
+    <div className="min-h-screen">
+      <div className="ios-bg" />
       {/* hidden capture surface */}
       <video ref={videoRef} className="hidden" playsInline muted />
 
-      <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-5 py-10">
-        <header className="mb-10">
-          <div className="flex items-center gap-2 text-sm font-medium text-neutral-400">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500" />
-            Recording
+      <div className="mx-auto flex min-h-screen max-w-lg flex-col px-5 py-12">
+        <header className="mb-9">
+          <div className="flex items-center gap-4">
+            <div className="app-icon">
+              <IconScreenRecord />
+            </div>
+            <h1 className="large-title">Screen to GIF</h1>
           </div>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-            Screen to GIF, in your browser
-          </h1>
-          <p className="mt-2 text-neutral-400">
-            Record your screen or drop in a video. It becomes a GIF on your
-            machine — nothing is uploaded.
+          <p className="subtitle">
+            Record your screen or drop in a video — it becomes a GIF right on
+            your device. Nothing is uploaded.
           </p>
         </header>
 
         {/* settings */}
-        <div className="grid grid-cols-3 gap-3">
-          <Selector
-            label="FPS"
+        <section className="ios-card p-5">
+          <Segmented
+            label="Frame rate"
             value={String(fps)}
             options={FPS_OPTIONS.map(String)}
             onChange={(v) => setFps(Number(v))}
             disabled={busy}
           />
-          <Selector
+          <Segmented
             label="Size"
             value={SIZE_OPTIONS[sizeIdx].label}
             options={SIZE_OPTIONS.map((o) => o.label)}
-            onChange={(v) => setSizeIdx(SIZE_OPTIONS.findIndex((o) => o.label === v))}
+            onChange={(v) =>
+              setSizeIdx(SIZE_OPTIONS.findIndex((o) => o.label === v))
+            }
             disabled={busy}
           />
-          <Selector
+          <Segmented
             label="Quality"
             value={QUALITY_OPTIONS[qualityIdx].label}
             options={QUALITY_OPTIONS.map((o) => o.label)}
@@ -229,7 +231,7 @@ export default function App() {
             }
             disabled={busy}
           />
-        </div>
+        </section>
 
         {/* main action area */}
         <div className="mt-6 flex-1">
@@ -241,118 +243,108 @@ export default function App() {
               }}
               onDragLeave={() => setDragging(false)}
               onDrop={onDrop}
-              className={`flex h-72 flex-col items-center justify-center rounded-2xl border-2 border-dashed transition ${
-                dragging
-                  ? "border-emerald-400 bg-emerald-400/5"
-                  : "border-neutral-800 bg-neutral-900/40"
+              className={`ios-card stagecard stagecard--drop stage-anim flex flex-col items-center justify-center gap-5 px-6 text-center ${
+                dragging ? "is-drag" : ""
               }`}
             >
               <button
                 onClick={() => void startRecording()}
-                className="rounded-xl bg-emerald-500 px-6 py-3 font-semibold text-emerald-950 transition hover:bg-emerald-400"
+                className="ios-btn ios-btn--blue"
               >
+                <IconRecord />
                 Start recording
               </button>
-              <p className="mt-4 text-sm text-neutral-500">
+              <p className="t-secondary text-sm">
                 or drop a video file to convert
               </p>
-              <p className="mt-6 text-xs text-neutral-600">
+              <p className="t-tertiary text-xs">
                 Press <Kbd>R</Kbd> to record · <Kbd>Esc</Kbd> to stop
               </p>
             </div>
           )}
 
           {stage === "recording" && (
-            <div className="flex h-72 flex-col items-center justify-center rounded-2xl border border-neutral-800 bg-neutral-900/40">
-              <div className="flex items-center gap-3 text-lg font-medium">
-                <span className="relative flex h-3 w-3">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
-                  <span className="relative inline-flex h-3 w-3 rounded-full bg-red-500" />
-                </span>
-                Capturing…
+            <div className="ios-card stagecard stage-anim flex flex-col items-center justify-center gap-5 px-6 text-center">
+              <div className="flex items-center gap-3 text-[17px] font-semibold">
+                <span className="rec-dot" />
+                Recording…
               </div>
-              <button
-                onClick={stopRecording}
-                className="mt-6 rounded-xl bg-neutral-100 px-6 py-3 font-semibold text-neutral-900 transition hover:bg-white"
-              >
+              <button onClick={stopRecording} className="ios-btn ios-btn--red">
+                <IconStop />
                 Stop &amp; make GIF
               </button>
-              <p className="mt-4 text-xs text-neutral-600">
+              <p className="t-tertiary text-xs">
                 or press <Kbd>Esc</Kbd>
               </p>
             </div>
           )}
 
           {stage === "encoding" && (
-            <div className="flex h-72 flex-col items-center justify-center rounded-2xl border border-neutral-800 bg-neutral-900/40 px-10">
-              <p className="font-medium">Encoding GIF…</p>
-              <div className="mt-4 h-2 w-full max-w-sm overflow-hidden rounded-full bg-neutral-800">
+            <div className="ios-card stagecard stage-anim flex flex-col items-center justify-center gap-4 px-10 text-center">
+              <p className="text-[17px] font-semibold">Creating GIF…</p>
+              <div className="ios-progress w-full max-w-sm">
                 <div
-                  className="h-full rounded-full bg-emerald-500 transition-[width] duration-150"
+                  className="ios-progress__fill"
                   style={{ width: `${Math.round(progress * 100)}%` }}
                 />
               </div>
-              <p className="mt-3 text-sm text-neutral-500">
+              <p className="t-secondary text-sm tnum">
                 {Math.round(progress * 100)}% · {frameCount} frames
               </p>
             </div>
           )}
 
           {stage === "done" && resultUrl && (
-            <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-4">
+            <div className="ios-card stage-anim p-4">
               <img
                 src={resultUrl}
                 alt="Your recording as a GIF"
-                className="mx-auto max-h-80 rounded-lg"
+                className="mx-auto max-h-80 rounded-xl"
               />
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                <div className="text-sm text-neutral-400">
-                  <span className="font-medium text-neutral-100">
-                    {formatBytes(resultSize)}
-                  </span>{" "}
-                  GIF
-                  {sourceSize !== null && (
-                    <>
-                      {" · from "}
-                      {formatBytes(sourceSize)}
-                      {savings !== null && savings > 0 && (
-                        <span className="ml-1 text-emerald-400">
-                          ({savings}% smaller)
-                        </span>
-                      )}
-                    </>
-                  )}
+              <div className="ios-list mt-4">
+                <div className="ios-list__row">
+                  <span className="k">GIF size</span>
+                  <span className="v">{formatBytes(resultSize)}</span>
                 </div>
-                <div className="flex gap-2">
-                  <a
-                    href={resultUrl}
-                    download="recording.gif"
-                    className="rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-400"
-                  >
-                    Download GIF
-                  </a>
-                  <button
-                    onClick={() => {
-                      resetResult();
-                      setStage("idle");
-                    }}
-                    className="rounded-xl border border-neutral-700 px-5 py-2.5 text-sm font-medium text-neutral-200 transition hover:bg-neutral-800"
-                  >
-                    New
-                  </button>
-                </div>
+                {sourceSize !== null && (
+                  <div className="ios-list__row">
+                    <span className="k">Original</span>
+                    <span className="v">{formatBytes(sourceSize)}</span>
+                  </div>
+                )}
+                {savings !== null && savings > 0 && (
+                  <div className="ios-list__row">
+                    <span className="k">Saved</span>
+                    <span className="v green">{savings}% smaller</span>
+                  </div>
+                )}
+              </div>
+              <div className="mt-4 flex flex-col gap-2">
+                <a
+                  href={resultUrl}
+                  download="recording.gif"
+                  className="ios-btn ios-btn--blue ios-btn--full"
+                >
+                  <IconDownload />
+                  Save GIF
+                </a>
+                <button
+                  onClick={() => {
+                    resetResult();
+                    setStage("idle");
+                  }}
+                  className="ios-btn ios-btn--plain ios-btn--full"
+                >
+                  Record another
+                </button>
               </div>
             </div>
           )}
 
-          {error && (
-            <p className="mt-4 rounded-lg border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-300">
-              {error}
-            </p>
-          )}
+          {error && <p className="ios-note mt-4">{error}</p>}
         </div>
 
-        <footer className="mt-10 text-center text-xs text-neutral-600">
+        <footer className="t-secondary mt-10 text-center text-xs">
           100% client-side · your recording never leaves your device
         </footer>
       </div>
@@ -360,7 +352,7 @@ export default function App() {
   );
 }
 
-function Selector({
+function Segmented({
   label,
   value,
   options,
@@ -373,31 +365,102 @@ function Selector({
   onChange: (v: string) => void;
   disabled?: boolean;
 }) {
+  const idx = Math.max(0, options.indexOf(value));
   return (
-    <label className="block">
-      <span className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-neutral-500">
-        {label}
-      </span>
-      <select
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 outline-none transition focus:border-neutral-600 disabled:opacity-50"
+    <div className="setting">
+      <span className="setting__label">{label}</span>
+      <div
+        className={`ios-seg ${disabled ? "is-disabled" : ""}`}
+        role="group"
+        aria-label={label}
       >
+        <span
+          className="ios-seg__thumb"
+          style={{
+            width: `calc((100% - 4px) / ${options.length})`,
+            transform: `translateX(${idx * 100}%)`,
+          }}
+        />
         {options.map((o) => (
-          <option key={o} value={o}>
+          <button
+            key={o}
+            type="button"
+            disabled={disabled}
+            aria-pressed={o === value}
+            onClick={() => onChange(o)}
+            className={`ios-seg__opt ${o === value ? "is-active" : ""}`}
+          >
             {o}
-          </option>
+          </button>
         ))}
-      </select>
-    </label>
+      </div>
+    </div>
   );
 }
 
 function Kbd({ children }: { children: React.ReactNode }) {
+  return <kbd className="ios-kbd">{children}</kbd>;
+}
+
+/* SF Symbols–style glyphs (currentColor, rounded strokes) */
+
+function IconScreenRecord() {
   return (
-    <kbd className="rounded border border-neutral-700 bg-neutral-800 px-1.5 py-0.5 font-mono text-[0.7rem] text-neutral-300">
-      {children}
-    </kbd>
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect
+        x="3.2"
+        y="5"
+        width="17.6"
+        height="13"
+        rx="3"
+        stroke="currentColor"
+        strokeWidth="1.7"
+      />
+      <circle cx="12" cy="11.5" r="3.1" fill="currentColor" />
+    </svg>
+  );
+}
+
+function IconRecord() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="5" fill="currentColor" />
+      <circle
+        cx="12"
+        cy="12"
+        r="8.4"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        opacity="0.9"
+      />
+    </svg>
+  );
+}
+
+function IconStop() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="6.5" y="6.5" width="11" height="11" rx="2.6" fill="currentColor" />
+    </svg>
+  );
+}
+
+function IconDownload() {
+  return (
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 4v9" />
+      <path d="M8.5 10.5 12 14l3.5-3.5" />
+      <path d="M5 15v2.5A2.5 2.5 0 0 0 7.5 20h9a2.5 2.5 0 0 0 2.5-2.5V15" />
+    </svg>
   );
 }
