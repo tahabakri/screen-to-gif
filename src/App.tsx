@@ -16,14 +16,6 @@ const QUALITY_OPTIONS = [
   { label: "Tiny", maxColors: 64 },
 ] as const;
 
-const MARQUEE = [
-  "Screen → GIF",
-  "100% Client-Side",
-  "Nothing Uploaded",
-  "No Compromise",
-  "Raw & Fast",
-];
-
 export default function App() {
   const [stage, setStage] = useState<Stage>("idle");
   const [fps, setFps] = useState(15);
@@ -39,9 +31,7 @@ export default function App() {
   const [dragging, setDragging] = useState(false);
   const [dark, setDark] = useState<boolean>(() => {
     try {
-      const saved = localStorage.getItem("scrgif-theme");
-      if (saved) return saved === "dark";
-      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+      return localStorage.getItem("scrgif-theme") === "dark";
     } catch {
       return false;
     }
@@ -105,11 +95,12 @@ export default function App() {
   const stopRecording = useCallback(() => {
     const sampler = samplerRef.current;
     if (!sampler) return;
-    sampler.stop();
     samplerRef.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
-    void runEncode(sampler.frames);
+    setStage("encoding");
+    setProgress(0);
+    void sampler.stop().then(runEncode);
   }, [runEncode]);
 
   const startRecording = useCallback(async () => {
@@ -168,9 +159,9 @@ export default function App() {
         await new Promise<void>((res) => {
           video.onended = () => res();
         });
-        sampler.stop();
+        const frames = await sampler.stop();
         URL.revokeObjectURL(url);
-        await runEncode(sampler.frames);
+        await runEncode(frames);
       } catch (err) {
         URL.revokeObjectURL(url);
         setError(err instanceof Error ? err.message : "Conversion failed.");
@@ -211,286 +202,275 @@ export default function App() {
       ? Math.max(0, Math.round((1 - resultSize / sourceSize) * 100))
       : null;
   const pct = Math.round(progress * 100);
-  const statusLabel =
+  const status =
     stage === "recording"
-      ? "Capturing"
+      ? { label: "Recording", color: "var(--danger)" }
       : stage === "encoding"
-      ? `Encoding ${pct}%`
+      ? { label: `Rendering ${pct}%`, color: "var(--yellow)" }
       : stage === "done"
-      ? "Render Complete"
-      : "All Systems Operational";
+      ? { label: "Render complete", color: "var(--green)" }
+      : { label: "Ready", color: "var(--green)" };
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden theme-bg-page theme-text-main">
-      <div className="grain" />
+    <div className="h-screen overflow-hidden flex flex-col">
+      <div className="grid-bg" />
       {/* hidden capture surface */}
       <video ref={videoRef} className="hidden" playsInline muted />
 
-      {/* NAV */}
-      <nav className="flex items-stretch justify-between h-14 border-b-2 theme-border shrink-0">
-        <div className="flex items-center px-5 bg-lime-400 text-black border-r-2 theme-border select-none">
-          <IconBox />
-          <span className="ml-3 font-mono text-sm font-bold tracking-tight">
-            SCR//GIF
+      {/* TOP BAR */}
+      <header className="flex items-center justify-between h-16 px-5 border-b-2 theme-border shrink-0">
+        <div className="flex items-center gap-2.5">
+          <div
+            className="w-9 h-9 rounded-lg border-2 theme-border flex items-center justify-center brutal-shadow-sm"
+            style={{ background: "var(--green)", color: "#000" }}
+          >
+            <IconFilm />
+          </div>
+          <span className="font-display text-lg font-bold tracking-tight">
+            Screen → GIF
           </span>
         </div>
-        <div className="flex items-stretch">
-          <div className="hidden sm:flex items-center px-5 border-l-2 theme-border font-mono text-[10px] uppercase tracking-widest theme-text-muted select-none">
-            Client-Side · No Upload
-          </div>
+        <div className="flex items-center gap-3">
+          <span className="pill hidden sm:inline-flex">
+            <IconLock />
+            Private · nothing uploaded
+          </span>
           <button
             onClick={() => setDark((d) => !d)}
-            className="flex items-center gap-2 px-5 border-l-2 theme-border font-mono text-[11px] uppercase tracking-widest hover:bg-[var(--text-main)] hover:text-[var(--bg-page)] transition-colors"
+            className="btn btn-white !px-3 !py-2 !text-xs"
+            aria-label="Toggle theme"
           >
             {dark ? <IconSun /> : <IconMoon />}
             <span className="hidden sm:inline">{dark ? "Light" : "Dark"}</span>
           </button>
         </div>
-      </nav>
-
-      {/* MARQUEE */}
-      <div className="overflow-hidden bg-lime-400 text-black border-b-2 theme-border py-1.5 shrink-0 select-none">
-        <div className="flex w-max animate-marquee">
-          {[0, 1].map((g) => (
-            <div
-              key={g}
-              className="flex items-center gap-6 pr-6 font-mono text-xs font-bold uppercase tracking-tight"
-            >
-              {MARQUEE.map((m, i) => (
-                <span key={i} className="flex items-center gap-6">
-                  <span>{m}</span>
-                  <IconAsterisk />
-                </span>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
+      </header>
 
       {/* MAIN */}
-      <main className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[320px_1fr]">
-        {/* LEFT — CONFIG / CONTROL DECK */}
-        <aside className="flex flex-col min-h-0 border-b-2 md:border-b-0 md:border-r-2 theme-border theme-bg-page">
-          <div className="flex items-center justify-between px-5 h-11 border-b-2 theme-border shrink-0">
-            <span className="font-mono text-[11px] uppercase tracking-widest theme-text-muted">
-              // Config
-            </span>
-            <span className="font-mono text-[11px] tracking-widest theme-text-muted">
-              v2.0
-            </span>
-          </div>
+      <main className="flex-1 min-h-0 p-5 md:p-6">
+        <div className="h-full grid grid-cols-1 md:grid-cols-[330px_1fr] gap-5 md:gap-6">
+          {/* LEFT — SETTINGS */}
+          <aside className="card p-5 flex flex-col min-h-0">
+            <h2 className="font-display text-base font-bold">Settings</h2>
+            <p className="text-xs theme-text-muted mb-4">Tune it, then record.</p>
 
-          <div className="flex-1 min-h-0 p-5 flex flex-col gap-5 overflow-hidden">
-            <Selector
-              tag="01"
-              label="Frame Rate"
-              value={String(fps)}
-              options={FPS_OPTIONS.map(String)}
-              onChange={(v) => setFps(Number(v))}
-              disabled={busy}
-            />
-            <Selector
-              tag="02"
-              label="Size"
-              value={SIZE_OPTIONS[sizeIdx].label}
-              options={SIZE_OPTIONS.map((o) => o.label)}
-              onChange={(v) =>
-                setSizeIdx(SIZE_OPTIONS.findIndex((o) => o.label === v))
-              }
-              disabled={busy}
-            />
-            <Selector
-              tag="03"
-              label="Quality"
-              value={QUALITY_OPTIONS[qualityIdx].label}
-              options={QUALITY_OPTIONS.map((o) => o.label)}
-              onChange={(v) =>
-                setQualityIdx(QUALITY_OPTIONS.findIndex((o) => o.label === v))
-              }
-              disabled={busy}
-            />
-          </div>
+            <div className="flex flex-col gap-4 flex-1 min-h-0">
+              <Selector
+                label="Frames per second"
+                value={String(fps)}
+                options={FPS_OPTIONS.map(String)}
+                onChange={(v) => setFps(Number(v))}
+                disabled={busy}
+              />
+              <Selector
+                label="Size"
+                value={SIZE_OPTIONS[sizeIdx].label}
+                options={SIZE_OPTIONS.map((o) => o.label)}
+                onChange={(v) =>
+                  setSizeIdx(SIZE_OPTIONS.findIndex((o) => o.label === v))
+                }
+                disabled={busy}
+              />
+              <Selector
+                label="Quality"
+                value={QUALITY_OPTIONS[qualityIdx].label}
+                options={QUALITY_OPTIONS.map((o) => o.label)}
+                onChange={(v) =>
+                  setQualityIdx(QUALITY_OPTIONS.findIndex((o) => o.label === v))
+                }
+                disabled={busy}
+              />
+            </div>
 
-          {/* action area — swaps by stage */}
-          <div className="p-5 border-t-2 theme-border shrink-0 flex flex-col gap-3">
-            {stage === "idle" && (
-              <>
+            {/* action area — swaps by stage */}
+            <div className="mt-4 flex flex-col gap-2.5">
+              {stage === "idle" && (
+                <>
+                  <button
+                    onClick={() => void startRecording()}
+                    className="btn btn-primary w-full !py-3.5"
+                  >
+                    <IconRecordDot />
+                    Record screen
+                  </button>
+                  <p className="text-[11px] theme-text-muted text-center">
+                    or drop a video on the right →
+                  </p>
+                </>
+              )}
+
+              {stage === "recording" && (
                 <button
-                  onClick={() => void startRecording()}
-                  className="w-full flex items-center justify-center gap-2 py-4 border-2 theme-border bg-[var(--text-main)] text-[var(--bg-page)] font-mono text-sm uppercase tracking-widest font-medium shadow-hard shadow-hard-hover shadow-hard-active transition-all"
+                  onClick={stopRecording}
+                  className="btn btn-danger w-full !py-3.5"
                 >
-                  Start Recording
-                  <IconArrowRight />
+                  <IconStop />
+                  Stop &amp; make GIF
                 </button>
-                <p className="font-mono text-[10px] uppercase tracking-widest theme-text-muted text-center">
-                  or drop a clip on the stage →
-                </p>
-              </>
+              )}
+
+              {stage === "encoding" && (
+                <button disabled className="btn btn-green w-full !py-3.5">
+                  Rendering… {pct}%
+                </button>
+              )}
+
+              {stage === "done" && (
+                <>
+                  <a
+                    href={resultUrl ?? "#"}
+                    download="recording.gif"
+                    className="btn btn-primary w-full !py-3.5"
+                  >
+                    <IconDownload />
+                    Save .gif
+                  </a>
+                  <button
+                    onClick={() => {
+                      resetResult();
+                      setStage("idle");
+                    }}
+                    className="btn btn-white w-full !py-2.5 !text-sm"
+                  >
+                    Record another
+                  </button>
+                </>
+              )}
+            </div>
+          </aside>
+
+          {/* RIGHT — STAGE */}
+          <section className="card p-4 flex flex-col min-h-0">
+            {error && (
+              <div
+                className="mb-3 rounded-xl border-2 px-4 py-2.5 text-sm font-semibold shrink-0"
+                style={{
+                  borderColor: "var(--danger)",
+                  color: "var(--danger)",
+                  background: "color-mix(in srgb, var(--danger) 10%, transparent)",
+                }}
+              >
+                {error}
+              </div>
+            )}
+
+            {stage === "idle" && (
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragging(true);
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={onDrop}
+                className={`drop flex-1 min-h-0 flex flex-col items-center justify-center gap-3 text-center px-6 ${
+                  dragging ? "is-drag" : ""
+                }`}
+              >
+                <div
+                  className="w-14 h-14 rounded-xl border-2 theme-border flex items-center justify-center brutal-shadow-sm"
+                  style={{ background: "var(--blue)", color: "#000" }}
+                >
+                  <IconUpload />
+                </div>
+                <div className="font-display text-lg font-bold">
+                  Drop a video to convert
+                </div>
+                <div className="text-sm theme-text-muted">
+                  MP4, WebM, MOV — or press <Kbd>R</Kbd> to record your screen
+                </div>
+              </div>
             )}
 
             {stage === "recording" && (
-              <button
-                onClick={stopRecording}
-                className="w-full flex items-center justify-center gap-2 py-4 border-2 theme-border bg-[var(--danger)] text-white font-mono text-sm uppercase tracking-widest font-medium shadow-hard shadow-hard-hover shadow-hard-active transition-all"
-              >
-                <IconStopSquare />
-                Stop &amp; Render
-              </button>
+              <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-4 text-center px-6">
+                <div className="flex items-center gap-2.5">
+                  <span
+                    className="w-3 h-3 rounded-full animate-pulse"
+                    style={{ background: "var(--danger)" }}
+                  />
+                  <span className="font-display text-xl font-bold">
+                    Recording…
+                  </span>
+                </div>
+                <div className="text-sm theme-text-muted">
+                  Capturing your screen — press <Kbd>Esc</Kbd> to stop
+                </div>
+              </div>
             )}
 
             {stage === "encoding" && (
-              <button
-                disabled
-                className="w-full flex items-center justify-center gap-2 py-4 border-2 theme-border bg-lime-400 text-black font-mono text-sm uppercase tracking-widest font-medium opacity-80 cursor-not-allowed"
-              >
-                Rendering… {pct}%
-              </button>
-            )}
-
-            {stage === "done" && (
-              <>
-                <a
-                  href={resultUrl ?? "#"}
-                  download="recording.gif"
-                  className="w-full flex items-center justify-center gap-2 py-4 border-2 theme-border bg-lime-400 text-black font-mono text-sm uppercase tracking-widest font-semibold shadow-hard shadow-hard-hover shadow-hard-active transition-all"
-                >
-                  <IconDownload />
-                  Save .GIF
-                </a>
-                <button
-                  onClick={() => {
-                    resetResult();
-                    setStage("idle");
-                  }}
-                  className="w-full py-3 border-2 theme-border bg-transparent font-mono text-xs uppercase tracking-widest hover:bg-[var(--text-main)] hover:text-[var(--bg-page)] transition-colors"
-                >
-                  Record New
-                </button>
-              </>
-            )}
-          </div>
-        </aside>
-
-        {/* RIGHT — STAGE */}
-        <section className="relative min-h-0 flex flex-col theme-bg-card">
-          {error && (
-            <div
-              className="m-4 mb-0 border-2 px-4 py-2 font-mono text-[11px] uppercase tracking-widest shrink-0"
-              style={{ borderColor: "var(--danger)", color: "var(--danger)" }}
-            >
-              {error}
-            </div>
-          )}
-
-          {stage === "idle" && (
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragging(true);
-              }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={onDrop}
-              className={`bru-drop m-4 flex-1 min-h-0 flex flex-col items-center justify-center gap-4 text-center ${
-                dragging ? "is-drag" : ""
-              }`}
-            >
-              <IconUpload />
-              <div className="font-mono text-sm uppercase tracking-widest">
-                Drop a video file
-              </div>
-              <div className="font-mono text-[11px] uppercase tracking-widest theme-text-muted">
-                or press <Kbd>R</Kbd> to record your screen
-              </div>
-            </div>
-          )}
-
-          {stage === "recording" && (
-            <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-5 text-center px-6">
-              <div className="flex items-center gap-3">
-                <span className="w-4 h-4 bg-[var(--danger)] border-2 theme-border animate-blink" />
-                <span className="font-mono text-xl uppercase tracking-widest">
-                  Recording
-                </span>
-              </div>
-              <div className="font-mono text-[11px] uppercase tracking-widest theme-text-muted">
-                Capturing your screen — <Kbd>Esc</Kbd> to stop
-              </div>
-            </div>
-          )}
-
-          {stage === "encoding" && (
-            <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-6 px-8 text-center">
-              <div className="font-mono text-7xl font-bold tabular-nums leading-none">
-                {pct}
-                <span className="text-3xl align-top">%</span>
-              </div>
-              <div className="bru-progress w-full max-w-md">
-                <div className="bru-progress__fill" style={{ width: `${pct}%` }} />
-              </div>
-              <div className="font-mono text-[11px] uppercase tracking-widest theme-text-muted">
-                Rendering · {frameCount} frames
-              </div>
-            </div>
-          )}
-
-          {stage === "done" && resultUrl && (
-            <div className="flex-1 min-h-0 flex flex-col p-4 gap-3">
-              <div className="relative flex-1 min-h-0 border-2 theme-border theme-bg-page flex items-center justify-center overflow-hidden">
-                <img
-                  src={resultUrl}
-                  alt="Your recording as a GIF"
-                  className="max-h-full max-w-full object-contain"
-                />
-                <div className="absolute bottom-0 left-0 px-2 py-1 border-t-2 border-r-2 theme-border theme-bg-card font-mono text-[10px] uppercase tracking-widest">
-                  Output.gif
+              <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-5 px-8 text-center">
+                <div className="font-display text-6xl font-bold tabular-nums">
+                  {pct}
+                  <span className="text-2xl align-top">%</span>
+                </div>
+                <div className="bar w-full max-w-sm">
+                  <div className="bar__fill" style={{ width: `${pct}%` }} />
+                </div>
+                <div className="text-sm theme-text-muted">
+                  Rendering {frameCount} frames…
                 </div>
               </div>
-              <div className="grid grid-cols-3 border-2 theme-border shrink-0 font-mono">
-                <Stat label="GIF" value={formatBytes(resultSize)} border />
-                <Stat
-                  label="Source"
-                  value={sourceSize !== null ? formatBytes(sourceSize) : "—"}
-                  border
-                />
-                <Stat
-                  label="Saved"
-                  value={savings !== null && savings > 0 ? `${savings}%` : "—"}
-                  accent={savings !== null && savings > 0}
-                />
+            )}
+
+            {stage === "done" && resultUrl && (
+              <div className="flex-1 min-h-0 flex flex-col gap-3">
+                <div
+                  className="relative flex-1 min-h-0 rounded-xl border-2 theme-border overflow-hidden flex items-center justify-center"
+                  style={{ background: "var(--bg)" }}
+                >
+                  <img
+                    src={resultUrl}
+                    alt="Your recording as a GIF"
+                    className="max-h-full max-w-full object-contain"
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-2.5 shrink-0">
+                  <Stat label="GIF size" value={formatBytes(resultSize)} />
+                  <Stat
+                    label="Original"
+                    value={sourceSize !== null ? formatBytes(sourceSize) : "—"}
+                  />
+                  <Stat
+                    label="Saved"
+                    value={savings !== null && savings > 0 ? `${savings}%` : "—"}
+                    accent={savings !== null && savings > 0}
+                  />
+                </div>
               </div>
-            </div>
-          )}
-        </section>
+            )}
+          </section>
+        </div>
       </main>
 
       {/* STATUS BAR */}
-      <div className="h-9 border-t-2 theme-border flex items-center justify-between px-4 shrink-0 font-mono text-[10px] uppercase tracking-widest theme-bg-page">
-        <div className="flex items-center gap-2">
-          <span className="theme-text-muted">Press</span>
+      <footer className="h-10 px-5 border-t-2 theme-border flex items-center justify-between shrink-0 text-xs">
+        <div className="flex items-center gap-2 theme-text-muted">
+          <span>Press</span>
           <Kbd>R</Kbd>
-          <span className="theme-text-muted">rec</span>
-          <span className="theme-text-muted">/</span>
+          <span>to record,</span>
           <Kbd>Esc</Kbd>
-          <span className="theme-text-muted">stop</span>
+          <span>to stop</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-          <span>{statusLabel}</span>
+          <span
+            className="w-2 h-2 rounded-full"
+            style={{ background: status.color }}
+          />
+          <span className="font-semibold">{status.label}</span>
         </div>
-      </div>
+      </footer>
     </div>
   );
 }
 
 function Selector({
-  tag,
   label,
   value,
   options,
   onChange,
   disabled,
 }: {
-  tag: string;
   label: string;
   value: string;
   options: string[];
@@ -499,40 +479,20 @@ function Selector({
 }) {
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
-        <span className="font-mono text-[11px] uppercase tracking-widest theme-text-muted">
-          {label}
-        </span>
-        <span className="font-mono text-[11px] tracking-widest theme-text-muted">
-          {tag}
-        </span>
-      </div>
-      <div
-        className={`grid grid-flow-col auto-cols-fr border-2 theme-border ${
-          disabled ? "opacity-40 pointer-events-none" : ""
-        }`}
-      >
-        {options.map((o, i) => {
-          const active = o === value;
-          return (
-            <button
-              key={o}
-              type="button"
-              disabled={disabled}
-              aria-pressed={active}
-              onClick={() => onChange(o)}
-              className={`py-2.5 font-mono text-xs uppercase tracking-wide transition-colors ${
-                i > 0 ? "border-l-2 theme-border" : ""
-              } ${
-                active
-                  ? "bg-lime-400 text-black font-semibold"
-                  : "hover:bg-[var(--text-main)] hover:text-[var(--bg-page)]"
-              }`}
-            >
-              {o}
-            </button>
-          );
-        })}
+      <span className="block text-sm font-semibold mb-1.5">{label}</span>
+      <div className={`seg ${disabled ? "is-disabled" : ""}`} role="group" aria-label={label}>
+        {options.map((o) => (
+          <button
+            key={o}
+            type="button"
+            disabled={disabled}
+            aria-pressed={o === value}
+            onClick={() => onChange(o)}
+            className={`seg__opt ${o === value ? "is-active" : ""}`}
+          >
+            {o}
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -541,21 +501,26 @@ function Selector({
 function Stat({
   label,
   value,
-  border,
   accent,
 }: {
   label: string;
   value: string;
-  border?: boolean;
   accent?: boolean;
 }) {
   return (
-    <div className={`p-2.5 ${border ? "border-r-2 theme-border" : ""}`}>
-      <div className="text-[10px] uppercase tracking-widest theme-text-muted">
+    <div
+      className="rounded-xl border-2 theme-border p-3"
+      style={{ background: accent ? "var(--green)" : "var(--surface)" }}
+    >
+      <div
+        className="text-[11px] font-semibold"
+        style={{ color: accent ? "#000" : "var(--text-muted)" }}
+      >
         {label}
       </div>
       <div
-        className={`text-sm font-bold tabular-nums ${accent ? "text-lime-500" : ""}`}
+        className="font-display text-base font-bold tabular-nums"
+        style={{ color: accent ? "#000" : "var(--text)" }}
       >
         {value}
       </div>
@@ -564,12 +529,12 @@ function Stat({
 }
 
 function Kbd({ children }: { children: React.ReactNode }) {
-  return <kbd className="bru-kbd">{children}</kbd>;
+  return <kbd className="kbd">{children}</kbd>;
 }
 
 /* lucide-style inline glyphs (currentColor) */
 
-function IconBox() {
+function IconFilm() {
   return (
     <svg
       width="20"
@@ -577,33 +542,54 @@ function IconBox() {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.6"
+      strokeWidth="1.7"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
-      <path d="m3.3 7 8.7 5 8.7-5" />
-      <path d="M12 22V12" />
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M7 3v18" />
+      <path d="M3 7.5h4" />
+      <path d="M3 12h18" />
+      <path d="M3 16.5h4" />
+      <path d="M17 3v18" />
+      <path d="M17 7.5h4" />
+      <path d="M17 16.5h4" />
     </svg>
   );
 }
 
-function IconArrowRight() {
+function IconLock() {
   return (
     <svg
-      width="16"
-      height="16"
+      width="13"
+      height="13"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.8"
+      strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="M5 12h14" />
-      <path d="m12 5 7 7-7 7" />
+      <rect width="18" height="11" x="3" y="11" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  );
+}
+
+function IconRecordDot() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="6" fill="currentColor" />
+    </svg>
+  );
+}
+
+function IconStop() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="5" y="5" width="14" height="14" rx="2.5" fill="currentColor" />
     </svg>
   );
 }
@@ -611,12 +597,12 @@ function IconArrowRight() {
 function IconUpload() {
   return (
     <svg
-      width="40"
-      height="40"
+      width="26"
+      height="26"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.5"
+      strokeWidth="1.7"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -624,14 +610,6 @@ function IconUpload() {
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
       <path d="M17 8l-5-5-5 5" />
       <path d="M12 3v12" />
-    </svg>
-  );
-}
-
-function IconStopSquare() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="5" y="5" width="14" height="14" fill="currentColor" />
     </svg>
   );
 }
@@ -664,7 +642,7 @@ function IconSun() {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.8"
+      strokeWidth="1.9"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -690,31 +668,12 @@ function IconMoon() {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.8"
+      strokeWidth="1.9"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
     >
       <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
-    </svg>
-  );
-}
-
-function IconAsterisk() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      aria-hidden="true"
-    >
-      <path d="M12 6v12" />
-      <path d="M17.196 9 6.804 15" />
-      <path d="m6.804 9 10.392 6" />
     </svg>
   );
 }

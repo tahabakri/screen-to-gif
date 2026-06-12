@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SCR//GIF — screen recorder to GIF, in your browser</title>
+    <title>Screen → GIF — record your screen as a GIF, in your browser</title>
     <meta
       name="description"
       content="A fast, private, client-side screen recorder and video-to-GIF converter. Nothing is uploaded."
@@ -11,15 +11,14 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
     <script>
-      // Set theme class before paint to avoid a flash of the wrong appearance.
+      // Set theme class before paint to avoid a flash. Defaults to light.
       try {
-        var t = localStorage.getItem("scrgif-theme");
-        var d = t ? t === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
-        if (d) document.documentElement.classList.add("dark");
+        if (localStorage.getItem("scrgif-theme") === "dark")
+          document.documentElement.classList.add("dark");
       } catch (e) {}
     </script>
   </head>

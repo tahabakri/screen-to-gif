@@ -1,28 +1,34 @@
 @import "tailwindcss";
 
 /* ============================================================
-   NEO//RAW — neo-brutalist design system
-   Space Grotesk + JetBrains Mono · hard borders · hard shadows
-   lime-400 accent · square corners · manual light/dark
+   Soft neo-brutalism (HabitFlow style)
+   cream canvas · Inter + Space Grotesk · rounded · pastel accents
+   black-on-cream high contrast · hard offset shadows · light/dark
    ============================================================ */
 
 :root {
-  --bg-page: #f2f2f2;
-  --bg-card: #ffffff;
-  --text-main: #0a0a0a;
-  --text-muted: #525252;
-  --border-main: #000000;
-  --lime: #a3e635;
-  --danger: #dc2626;
+  --bg: #fffdf7;
+  --surface: #ffffff;
+  --text: #18181b;
+  --text-muted: #52525b;
+  --border: #000000;
+  --grid: #000000;
+
+  --green: #86efac;
+  --yellow: #fde047;
+  --pink: #ff9ebb;
+  --blue: #bfdbfe;
+  --danger: #ef4444;
   color-scheme: light;
 }
 
 :root.dark {
-  --bg-page: #0f0f0f;
-  --bg-card: #171717;
-  --text-main: #ededed;
-  --text-muted: #a3a3a3;
-  --border-main: #ffffff;
+  --bg: #18181b;
+  --surface: #27272a;
+  --text: #fafafa;
+  --text-muted: #a1a1aa;
+  --border: #ffffff;
+  --grid: #ffffff;
   color-scheme: dark;
 }
 
@@ -35,126 +41,202 @@ body,
 body {
   margin: 0;
   overflow: hidden; /* single-screen app — no page scroll */
-  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
-  background-color: var(--bg-page);
-  color: var(--text-main);
-  cursor: crosshair;
+  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 ::selection {
-  background: var(--lime);
+  background: #fef08a;
   color: #000;
 }
 
-/* token utilities (bridge CSS vars into class usage) ---------- */
-.font-mono {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+.font-display {
+  font-family: "Space Grotesk", "Inter", sans-serif;
 }
+
+/* token utilities -------------------------------------------- */
 .theme-border {
-  border-color: var(--border-main);
-}
-.theme-bg-page {
-  background-color: var(--bg-page);
-}
-.theme-bg-card {
-  background-color: var(--bg-card);
-}
-.theme-text-main {
-  color: var(--text-main);
+  border-color: var(--border);
 }
 .theme-text-muted {
   color: var(--text-muted);
 }
 
-/* hard offset shadow ----------------------------------------- */
-.shadow-hard {
-  box-shadow: 4px 4px 0px 0px var(--border-main);
-}
-.shadow-hard-hover:hover {
-  box-shadow: 6px 6px 0px 0px var(--border-main);
-  transform: translate(-2px, -2px);
-}
-.shadow-hard-active:active {
-  box-shadow: 0px 0px 0px 0px var(--border-main);
-  transform: translate(4px, 4px);
-}
-
-/* grain overlay ---------------------------------------------- */
-.grain {
+/* subtle graph-paper backdrop -------------------------------- */
+.grid-bg {
   position: fixed;
   inset: 0;
+  z-index: -10;
   pointer-events: none;
-  z-index: 50;
-  opacity: 0.05;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  opacity: 0.04;
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-position: center center;
 }
 
-/* marquee ---------------------------------------------------- */
-@keyframes marquee {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
+/* hard offset shadows ---------------------------------------- */
+.brutal-shadow {
+  box-shadow: 4px 4px 0px 0px var(--border);
 }
-.animate-marquee {
-  animation: marquee 22s linear infinite;
+.brutal-shadow-sm {
+  box-shadow: 2px 2px 0px 0px var(--border);
+}
+.brutal-shadow-lg {
+  box-shadow: 6px 6px 0px 0px var(--border);
 }
 
-/* hard brutalist blink (steps, no fade) ---------------------- */
-@keyframes bru-blink {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.15;
-  }
-}
-.animate-blink {
-  animation: bru-blink 1s steps(1, end) infinite;
+/* card ------------------------------------------------------- */
+.card {
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 4px 4px 0px 0px var(--border);
 }
 
-/* brutalist progress ----------------------------------------- */
-.bru-progress {
-  width: 100%;
-  height: 28px;
-  border: 2px solid var(--border-main);
-  background: var(--bg-page);
+/* pill / badge ----------------------------------------------- */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 2px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 2px 2px 0px 0px var(--border);
+}
+
+/* button ----------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 18px;
+  font-family: "Inter", sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 4px 4px 0px 0px var(--border);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px 0px var(--border);
+}
+.btn:active {
+  transform: translate(4px, 4px);
+  box-shadow: 0px 0px 0px 0px var(--border);
+}
+.btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+  transform: none;
+  box-shadow: 4px 4px 0px 0px var(--border);
+}
+.btn-primary {
+  background: var(--text);
+  color: var(--bg);
+}
+.btn-white {
+  background: var(--surface);
+  color: var(--text);
+}
+.btn-green {
+  background: var(--green);
+  color: #000;
+}
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* segmented selector ----------------------------------------- */
+.seg {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  border: 2px solid var(--border);
+  border-radius: 12px;
   overflow: hidden;
+  background: var(--surface);
 }
-.bru-progress__fill {
+.seg.is-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.seg__opt {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 9px 4px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.seg__opt + .seg__opt {
+  border-left: 2px solid var(--border);
+}
+.seg__opt.is-active {
+  background: var(--green);
+  color: #000;
+  font-weight: 700;
+}
+.seg__opt:not(.is-active):hover {
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+/* drop target ------------------------------------------------ */
+.drop {
+  border: 2px dashed var(--border);
+  border-radius: 14px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.drop.is-drag {
+  border-style: solid;
+  background: color-mix(in srgb, var(--green) 30%, transparent);
+}
+
+/* progress --------------------------------------------------- */
+.bar {
+  width: 100%;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.bar__fill {
   height: 100%;
-  background: var(--lime);
-  border-right: 2px solid var(--border-main);
+  background: var(--green);
   transition: width 0.12s linear;
 }
 
 /* keycap ----------------------------------------------------- */
-.bru-kbd {
+.kbd {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 20px;
-  padding: 1px 5px;
-  border: 2px solid var(--border-main);
-  background: var(--bg-card);
-  color: var(--text-main);
-  font-family: "JetBrains Mono", monospace;
+  padding: 1px 6px;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: "Inter", sans-serif;
   font-size: 11px;
   font-weight: 700;
-  line-height: 1.2;
-}
-
-/* drop target ------------------------------------------------ */
-.bru-drop {
-  border: 2px dashed var(--border-main);
-  transition: background-color 0.15s ease, border-style 0.15s ease;
-}
-.bru-drop.is-drag {
-  border-style: solid;
-  background-color: color-mix(in srgb, var(--lime) 25%, transparent);
+  box-shadow: 1px 1px 0px 0px var(--border);
 }
